@@ -2,7 +2,7 @@
 
 Kensa is an AI-powered research companion that fetches new arXiv papers, clusters them by theme, and generates a concise weekly digest with optional text-to-speech narration. It is designed to help researchers and students stay informed without the noise or overload.
 
-Built during CalHacks, powered by Claude 3.5, Chroma, and V0 by Vercel.
+Built during CalHacks 12.0, powered by Claude 3.5, Chroma, and V0 by Vercel.
 
 ---
 

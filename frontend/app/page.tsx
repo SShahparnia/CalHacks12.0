@@ -90,7 +90,7 @@ export default function Page() {
           </Link>
           <div className="w-px h-4 bg-border" />
           <a
-            href="https://github.com"
+            href="https://github.com/rohankhatri7/CalHacks12.0"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"

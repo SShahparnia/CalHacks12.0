@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+arxiv
+sentence-transformers
+chromadb
+scikit-learn
+anthropic
+python-dotenv
+requests
+sqlite-utils

@@ -1,0 +1,27 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python (backend)
+backend/venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/.env
+
+# Node (frontend)
+frontend/node_modules/
+frontend/.next/
+frontend/.turbo/
+frontend/.vercel/
+frontend/.env.local
+
+# Data / caches
+chroma_store/          # your Chroma persistence dir
+**/.cache/
+**/dist/
+**/build/

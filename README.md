@@ -1,6 +1,6 @@
-# PaperMapper
+# Kensa
 
-PaperMapper is a minimal AI-powered research companion that fetches new arXiv papers, clusters them by theme, and summarizes each week’s developments into a clear, concise digest with optional text-to-speech narration.
+Kensa is an AI-powered research companion that fetches new arXiv papers, clusters them by theme, and generates a concise weekly digest with optional text-to-speech narration. It is designed to help researchers and students stay informed without the noise or overload.
 
 Built during CalHacks, powered by Claude 3.5, Chroma, and V0 by Vercel.
 
@@ -10,10 +10,10 @@ Built during CalHacks, powered by Claude 3.5, Chroma, and V0 by Vercel.
 
 - Fetches the latest papers from arXiv by topic  
 - Clusters related papers using MiniLM and Chroma  
-- Generates human-readable digests with Claude 3.5 Sonnet  
-- Optional audio digest using Fish Audio (TTS)  
+- Generates readable digests with Claude 3.5 Sonnet  
+- Optional spoken digest using Fish Audio (TTS)  
 - Caches digests locally with SQLite  
-- Simple and elegant V0 frontend built with Next.js and Tailwind
+- Clean and responsive V0 frontend built with Next.js and Tailwind
 
 ---
 
@@ -35,8 +35,8 @@ Built during CalHacks, powered by Claude 3.5, Chroma, and V0 by Vercel.
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/papermapper.git
-cd papermapper
+git clone https://github.com/yourusername/kensa.git
+cd kensa
 ```
 
 ### 2. Backend Setup
@@ -93,7 +93,7 @@ Generates a digest for a given topic.
 
 ## Using Chroma for Paper Storage and Retrieval
 
-PaperMapper uses **Chroma** as its vector database to store and retrieve paper embeddings.
+Kensa uses **Chroma** as its vector database to store and retrieve paper embeddings.
 
 ```python
 import chromadb
@@ -128,7 +128,7 @@ Chroma automatically persists your embeddings and metadata to a local `.chroma/`
 ## Project Structure
 
 ```
-papermapper/
+kensa/
 ├── backend/
 │   ├── main.py
 │   ├── arxiv_ingest.py
@@ -139,7 +139,7 @@ papermapper/
 │   └── tts_fish_audio.py
 ├── frontend/
 │   ├── app/
-│   │   └── papermapper/
+│   │   └── kensa/
 │   │       ├── page.tsx
 │   │       └── components/
 │   │           ├── TopicBar.tsx
@@ -179,7 +179,7 @@ Return plain text only.
 
 ## Text to Speech Integration (Fish Audio)
 
-PaperMapper uses **Fish Audio (Fish Speech)** to generate natural spoken digests.
+Kensa uses **Fish Audio (Fish Speech)** to generate high-quality spoken digests.
 
 **Installation**
 ```bash
@@ -203,3 +203,7 @@ The generated MP3 can be served directly through the `/api/tts` endpoint and pla
 Pull requests are welcome. For major changes, please open an issue first to discuss the proposed changes.
 
 ---
+
+## License
+
+MIT License. See `LICENSE` for details.

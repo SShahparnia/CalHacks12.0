@@ -1,7 +1,7 @@
-# PaperMapper — 10–12 Hour Build Plan (Claude 3.5 + V0 Frontend)
+# Kensa — 10–12 Hour Build Plan (Claude 3.5 + V0 Frontend)
 
 **Goal:**  
-Build a web app that automatically fetches recent **arXiv papers** by topic, clusters them by theme, and generates a **spoken weekly digest** using **Claude 3.5 Sonnet**.
+Build a web app that automatically fetches recent **arXiv papers** by topic, clusters them by theme, and generates a **spoken weekly digest** using **Claude 3.5 Sonnet** and **Fish Audio (TTS)**.
 
 ---
 
@@ -13,21 +13,21 @@ Build a web app that automatically fetches recent **arXiv papers** by topic, clu
 | **Backend** | **FastAPI + Uvicorn** | Lightweight API layer |
 | **Database** | **SQLite** | Store papers, digests, cached outputs |
 | **Embeddings** | `sentence-transformers` **all-MiniLM-L6-v2** | Local, fast embeddings |
-| **Vector Index** | **FAISS** (in-process) | Paper clustering |
-| **LLM** | **Claude 3.5 Sonnet (API)** | Summaries + digest writing |
-| **TTS (optional)** | **ElevenLabs** or **Piper** | Spoken digest |
-| **Deployment** | **Vercel (frontend)** + local/Render backend | Simple hosting |
+| **Vector Store** | **Chroma** | Paper embedding storage and retrieval |
+| **LLM** | **Claude 3.5 Sonnet (API)** | Summaries and digest writing |
+| **TTS** | **Fish Audio (Fish Speech)** | Spoken digest generation |
+| **Deployment** | **Vercel (frontend)** + local or Render backend | Simple hosting |
 
 ---
 
 ## System Architecture (Simplified)
 
 ```
-arXiv API → Embedding (MiniLM) → FAISS → Clustering (KMeans)
-       ↓                                 ↓
+arXiv API → Embedding (MiniLM) → Chroma → Clustering (KMeans)
+       ↓                                ↓
     SQLite ← Claude 3.5 Sonnet ← FastAPI → Frontend (V0)
        ↓
-  Optional TTS → Audio digest (MP3)
+   Fish Audio → Audio digest (MP3)
 ```
 
 ---
@@ -65,14 +65,14 @@ Returns the latest cached digest.
 
 ## 10–12 Hour Timeline (Detailed)
 
-### **Hour 0–2: Setup & Mock Stage**
+### **Hour 0–2: Setup and Mock Stage**
 **Goal:** Have a working skeleton with mock data visible in the browser.
 
 #### Tasks
 - **Frontend (V0):**
-  - Scaffold `/papermapper` with:
-    - Topic input bar + day selector  
-    - “Generate Digest” button  
+  - Scaffold `/kensa` with:
+    - Topic input bar and day selector  
+    - Generate Digest button  
     - Cluster card layout (label, bullets, paper links)
   - Include placeholders and loading states.
 
@@ -85,18 +85,18 @@ Clicking **Generate Digest** shows mock clusters on the screen.
 
 ---
 
-### **Hour 2–4: Data Ingestion + Storage**
+### **Hour 2–4: Data Ingestion and Storage**
 **Goal:** Pull real arXiv data and store it.
 
 #### Tasks
-- Use `python-arxiv` or simple `requests` to fetch:
+- Use `python-arxiv` or `requests` to fetch:
   ```python
   import arxiv
   search = arxiv.Search(query=topic, max_results=50, sort_by=arxiv.SortCriterion.SubmittedDate)
   ```
 - Parse and normalize:
   - `id`, `title`, `abstract`, `authors`, `url`, `published_at`
-- Store in **SQLite** table:
+- Store in SQLite:
   ```sql
   CREATE TABLE papers (
       id TEXT PRIMARY KEY,
@@ -106,30 +106,37 @@ Clicking **Generate Digest** shows mock clusters on the screen.
       published_at TEXT
   );
   ```
-- Dedup by title hash.
+- Deduplicate by title hash.
 
 #### Milestone
-Database fills with ~50–100 papers per topic.
+Database fills with 50–100 papers per topic.
 
 ---
 
-### **Hour 4–6: Embedding + Clustering**
+### **Hour 4–6: Embedding and Clustering**
 **Goal:** Create groups of related papers.
 
 #### Tasks
 - Use MiniLM to embed abstracts:
   ```python
   from sentence_transformers import SentenceTransformer
-  model = SentenceTransformer('all-MiniLM-L6-v2')
+  model = SentenceTransformer("all-MiniLM-L6-v2")
   embeddings = model.encode(paper_abstracts)
   ```
-- Build **FAISS** index:
+- Store embeddings in **Chroma**:
   ```python
-  import faiss
-  index = faiss.IndexFlatL2(embeddings.shape[1])
-  index.add(embeddings)
+  import chromadb
+  client = chromadb.Client()
+  collection = client.get_or_create_collection("papers")
+
+  collection.add(
+      ids=[p["id"] for p in papers],
+      embeddings=embeddings.tolist(),
+      metadatas=[{"title": p["title"], "url": p["url"]} for p in papers],
+      documents=[p["abstract"] for p in papers]
+  )
   ```
-- Run **KMeans (k=6)** clustering:
+- Run KMeans clustering:
   ```python
   from sklearn.cluster import KMeans
   km = KMeans(n_clusters=6, random_state=42)
@@ -140,39 +147,39 @@ Database fills with ~50–100 papers per topic.
   - Save `{cluster_id, title, abstract, url}`.
 
 #### Milestone
-Real clusters with top 3 papers each (labels TBD).
+Real clusters with top 3 papers each (labels pending).
 
 ---
 
-### **Hour 6–8: Claude Summaries + Digest**
-**Goal:** Replace placeholder labels/bullets with real summaries.
+### **Hour 6–8: Claude Summaries and Digest**
+**Goal:** Replace placeholder labels and bullets with real summaries.
 
 #### Tasks
-- Use **Claude 3.5 Sonnet** for:
-  - **Cluster labeling & bullets**
-  - **Weekly digest composition**
+- Use Claude 3.5 Sonnet for:
+  - Cluster labeling and summary bullets  
+  - Weekly digest generation  
 
-**Cluster Prompt:**
+**Cluster Prompt**
 ```
-You are an academic editor. For EACH cluster, return compact JSON:
+You are an academic editor. For each cluster, return compact JSON:
 { "label":"<≤5 words>",
   "bullets":["<≤12 words>","<≤12 words>","<≤12 words>"],
   "topPapers":[{"title":"...","why":"<≤12 words>"}] }
-Use only the provided titles/abstract snippets. Be factual, no hype.
+Use only the provided titles and abstracts. Be factual and concise.
 ```
 
-**Digest Prompt:**
+**Digest Prompt**
 ```
-Write a weekly digest for "{topic}" in ≤450 tokens:
-1) One-paragraph overview (what changed this week)
-2) 4–6 sections titled by cluster labels, each with 2 concise bullets
-3) End with "What to watch next" (3 bullets)
+Write a weekly digest for "{topic}" in 450 tokens or less:
+1. Overview paragraph summarizing the week
+2. 4–6 sections titled by cluster label, each with two concise bullets
+3. End with "What to watch next" containing three bullets
 Return plain text.
 ```
 
-#### Tasks (continued)
-- Batch 2 clusters per call to reduce latency/cost.
-- Add JSON validation & retry logic.
+#### Additional Tasks
+- Batch two clusters per API call to reduce latency.
+- Add JSON validation and retry logic.
 - Save results to SQLite:
   ```sql
   CREATE TABLE digests (
@@ -185,87 +192,90 @@ Return plain text.
   ```
 
 #### Milestone
-Each cluster has a meaningful label and summary; digest text generated.
+Each cluster has a label and bullets; digest generated successfully.
 
 ---
 
-### **Hour 8–10: Frontend Integration + Polishing**
-**Goal:** Connect everything, make it feel smooth and finished.
+### **Hour 8–10: Frontend Integration and Polishing**
+**Goal:** Connect everything and make it smooth for the demo.
 
 #### Tasks
-- Hook V0 frontend → `/api/digest/generate`
-- Show:
-  - Cluster label + bullets
-  - Top papers as links
-  - Digest text below clusters
-- Add:
-  - Loading skeletons (`isLoading` state)
-  - Error toasts
-  - Empty-state message (“No papers found”)
+- Hook V0 frontend to `/api/digest/generate`
+- Display:
+  - Cluster label and bullets  
+  - Linked paper titles  
+  - Digest text below clusters  
+- Add loading and error states:
+  - Loading skeletons  
+  - Error toasts  
+  - Empty-state messages  
 
 - Polish styling:
-  - Large readable fonts
-  - Card shadows
-  - Color-coded clusters
+  - Large readable fonts  
+  - Card shadows  
+  - Color-coded clusters  
 
 #### Milestone
-Full round trip: **type topic → Generate → clusters + digest render.**
+Full workflow: user enters topic → generates digest → sees results.
 
 ---
 
-### **Hour 10–12: Extras + Demo Polish**
-**Goal:** Add finishing touches and optional features.
+### **Hour 10–12: Extras and Demo Polish**
+**Goal:** Add final polish and optional enhancements.
 
-#### Optional Add-Ons
+#### Optional Add-ons
 1. **TTS (Spoken Digest):**
-   - Use ElevenLabs or Piper for `/api/tts`
-   - Play audio via `<audio>` element in UI.
+   - Use Fish Audio (Fish Speech) for `/api/tts`
+   - Play output via `<audio>` element in UI.
 2. **Caching:**
    - Cache digests by `(topic,days)` for 12–24 hours.
-   - If cached, skip LLM call.
+   - Skip redundant LLM calls.
 3. **Chat About Papers (stretch goal):**
-   - Retrieve top-k papers from FAISS → send to Claude → return grounded answer.
+   - Retrieve top-k papers from Chroma → summarize via Claude.
 4. **Hotness Score:**
-   - Add simple metric: `score = recency + cluster_size`.
+   - Simple ranking formula: `score = recency + cluster_size`.
 
 #### Demo Prep
-- Test 2 topics: `"diffusion models"` and `"LLM safety"`.
-- Record short walkthrough.
-- 60–90 sec live demo script:
+- Test topics: `"diffusion models"` and `"LLM safety"`.
+- Prepare short walkthrough and 60–90 second demo script:
   ```
   1. Enter topic "LLM safety"
   2. Click Generate
-  3. See themed clusters + summaries
-  4. Play 2-min audio digest
-  5. Copy share link for others
+  3. See clustered summaries
+  4. Play spoken digest
+  5. Copy share link
   ```
 
 #### Milestone
-Fully polished, demo-ready PaperMapper.
+Fully functional and polished Kensa demo.
 
 ---
 
-## 👥 Team Roles
+## Team Roles
 
 | Role | Responsibilities |
 |------|------------------|
-| **P1 – Backend Lead** | FastAPI setup, Claude integration, caching, TTS endpoint |
-| **P2 – Frontend (V0)** | Page scaffolding, styling, fetch logic, loading states |
-| **P3 – Data / ML** | arXiv ingest, embeddings, FAISS, clustering |
-| **P4 – QA / Integrator** | Testing, validation, debugging, polish |
+| Backend Lead | FastAPI setup, Claude integration, caching, TTS endpoint |
+| Frontend Lead | V0 page scaffolding, styling, data integration |
+| Data / ML Engineer | arXiv ingest, embeddings, Chroma, clustering |
+| QA / Integrator | Testing, validation, debugging, polish |
 
 ---
 
-## ⚙️ Guardrails & Configs
+## Configurations and Guardrails
 
-- **Claude Settings:**
+- **Claude Configuration**
   - `temperature = 0.4`
   - `max_tokens = 400–600`
   - `model = claude-3.5-sonnet`
-- **Error handling:** Retry once on invalid JSON.
-- **Caching:** Save digest JSON by `(topic, days)` in SQLite.
-- **Security:** Keep Claude API key server-side only.
-- **Performance:** Cap abstracts to 3 per cluster to limit context.
+- **Error Handling**
+  - Retry once on invalid JSON.
+- **Caching**
+  - Save digest JSON by `(topic, days)` in SQLite.
+- **Security**
+  - Keep Claude API key server-side.
+- **Performance**
+  - Limit abstracts to 3 per cluster for context control.
 
 ---
 
@@ -273,42 +283,43 @@ Fully polished, demo-ready PaperMapper.
 
 | Deliverable | Description |
 |--------------|-------------|
-| **Frontend (V0)** | `/papermapper` page with input, clusters, digest, and player |
+| **Frontend (V0)** | `/kensa` page with topic input, clusters, digest, and player |
 | **Backend (FastAPI)** | `/api/digest/generate` connected to Claude |
-| **SQLite DB** | Stores cached papers and digests |
-| **Claude Summaries** | Cluster labels, bullets, and digest |
-| **Audio Digest (optional)** | 2–3 minute spoken summary |
-| **Demo Video** | 1-minute screen recording of working app |
+| **SQLite Database** | Stores cached papers and digests |
+| **Claude Summaries** | Cluster labels, bullets, and weekly digest |
+| **Audio Digest** | 2–3 minute spoken summary using Fish Audio |
+| **Demo Video** | 1-minute recording of working app |
 
 ---
 
 ## What “Done” Looks Like
 
-- User enters topic → clicks **Generate Digest**  
-- App fetches arXiv papers → clusters → uses Claude → shows labeled clusters  
-- Digest paragraph + top papers displayed beautifully  
-- Audio digest plays smoothly  
-- Cached results load instantly next time  
+- User enters a topic and clicks Generate Digest  
+- Kensa fetches arXiv papers, embeds, and clusters them in Chroma  
+- Claude generates readable summaries and digest text  
+- Spoken digest is playable through Fish Audio  
+- Results are cached for reuse  
 
 **Result:**  
-A polished, research-focused, open-source, LLM-powered tool that looks clean, sounds professional, and *actually solves a real problem*.
+A clean, production-quality AI assistant for research discovery. Practical, elegant, and genuinely useful.
 
 ---
 
 ## Example Directory Layout
 
 ```
-papermapper/
+kensa/
 ├── backend/
 │   ├── main.py
 │   ├── arxiv_ingest.py
 │   ├── clustering.py
 │   ├── claude_client.py
 │   ├── database.py
-│   └── tts.py
+│   ├── chroma_store.py
+│   └── tts_fish_audio.py
 ├── frontend/
 │   ├── app/
-│   │   └── papermapper/
+│   │   └── kensa/
 │   │       ├── page.tsx
 │   │       └── components/
 │   │           ├── TopicBar.tsx
@@ -325,16 +336,14 @@ papermapper/
 ---
 
 ## Bonus Ideas (If Time Permits)
-- Add **search bar** for past digests (`/digest/[id]` route)
-- **Email weekly digest** to yourself via cron (APScheduler)
-- Display **graph of clusters** using `Plotly` or `recharts`
-- Add “**Eco mode**”: mini multi-agent debate ranking clusters by importance
+- Add search for past digests (`/digest/[id]` route)
+- Send weekly digests via email (APScheduler)
+- Visualize clusters with `Plotly` or `recharts`
+- Introduce multi-agent analysis (Planner, Critic, Summarizer)
 
 ---
 
 ## Pitch Summary (For Judges)
-> “We built **PaperMapper**, an open-source research companion that turns an entire week of new arXiv papers into a 2-minute digest.  
-> It fetches, clusters, summarizes, and even reads the results aloud.  
-> Powered by Claude 3.5 and a local FAISS + MiniLM pipeline — all open, fast, and focused on saving researchers time.”
-
----
+> “We built **Kensa**, an AI-powered research companion that turns a week of new arXiv papers into a concise, spoken digest.  
+> It fetches, clusters, summarizes, and narrates research updates using Claude 3.5, Chroma, and Fish Audio.  
+> Kensa makes cutting-edge research understandable and accessible to everyone.”

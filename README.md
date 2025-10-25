@@ -2,16 +2,16 @@
 
 PaperMapper is a minimal AI-powered research companion that fetches new arXiv papers, clusters them by theme, and summarizes each week’s developments into a clear, concise digest with optional text-to-speech narration.
 
-Built during CalHacks, powered by Claude 3.5, FAISS, and V0 by Vercel.
+Built during CalHacks, powered by Claude 3.5, Chroma, and V0 by Vercel.
 
 ---
 
 ## Features
 
 - Fetches the latest papers from arXiv by topic  
-- Clusters related papers using MiniLM and FAISS  
+- Clusters related papers using MiniLM and Chroma  
 - Generates human-readable digests with Claude 3.5 Sonnet  
-- Optional audio digest using text-to-speech  
+- Optional audio digest using Fish Audio (TTS)  
 - Caches digests locally with SQLite  
 - Simple and elegant V0 frontend built with Next.js and Tailwind
 
@@ -25,9 +25,9 @@ Built during CalHacks, powered by Claude 3.5, FAISS, and V0 by Vercel.
 | Backend | FastAPI, Uvicorn |
 | Database | SQLite |
 | Embeddings | Sentence Transformers (all-MiniLM-L6-v2) |
-| Vector Index | FAISS |
+| Vector Store | Chroma |
 | LLM | Claude 3.5 Sonnet (API) |
-| Text to Speech (Optional) | ElevenLabs or Piper |
+| Text to Speech | Fish Audio (Fish Speech TTS) |
 
 ---
 
@@ -44,7 +44,7 @@ Create and activate a virtual environment, then install dependencies:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install fastapi uvicorn[standard] python-arxiv sentence-transformers faiss-cpu scikit-learn anthropic sqlite-utils
+pip install fastapi uvicorn[standard] python-arxiv sentence-transformers chromadb scikit-learn anthropic sqlite-utils requests
 ```
 
 Run the backend:
@@ -84,9 +84,44 @@ Generates a digest for a given topic.
         {"id": "2501.12345", "title": "Improving Diffusion", "url": "https://arxiv.org/abs/2501.12345"}
       ]
     }
-  ]
+  ],
+  "audioUrl": "https://.../dg_123.mp3"
 }
 ```
+
+---
+
+## Using Chroma for Paper Storage and Retrieval
+
+PaperMapper uses **Chroma** as its vector database to store and retrieve paper embeddings.
+
+```python
+import chromadb
+from sentence_transformers import SentenceTransformer
+
+client = chromadb.Client()
+collection = client.get_or_create_collection("papers")
+
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+texts = [p["abstract"] for p in papers]
+embeddings = model.encode(texts)
+
+collection.add(
+    ids=[p["id"] for p in papers],
+    embeddings=embeddings.tolist(),
+    metadatas=[{"title": p["title"], "url": p["url"]} for p in papers],
+    documents=texts
+)
+
+# Query examples
+query_results = collection.query(
+    query_texts=["diffusion training efficiency"],
+    n_results=10
+)
+```
+
+Chroma automatically persists your embeddings and metadata to a local `.chroma/` directory, so no additional storage setup is required.
 
 ---
 
@@ -100,7 +135,8 @@ papermapper/
 │   ├── clustering.py
 │   ├── claude_client.py
 │   ├── database.py
-│   └── tts.py
+│   ├── chroma_store.py
+│   └── tts_fish_audio.py
 ├── frontend/
 │   ├── app/
 │   │   └── papermapper/
@@ -141,9 +177,29 @@ Return plain text only.
 
 ---
 
+## Text to Speech Integration (Fish Audio)
+
+PaperMapper uses **Fish Audio (Fish Speech)** to generate natural spoken digests.
+
+**Installation**
+```bash
+pip install fish-audio
+```
+
+**Example Usage**
+```python
+from fish_audio import FishTTS
+
+tts = FishTTS()
+tts.generate("This week in AI safety, researchers introduced new alignment methods...", "output.mp3")
+```
+
+The generated MP3 can be served directly through the `/api/tts` endpoint and played in the frontend audio component.
+
+---
+
 ## Contributing
 
 Pull requests are welcome. For major changes, please open an issue first to discuss the proposed changes.
 
 ---
-

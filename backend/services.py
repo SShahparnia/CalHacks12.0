@@ -7,24 +7,54 @@ import numpy as np
 import chromadb
 from chromadb.config import Settings
 from anthropic import Anthropic
+import datetime as dt
 from dotenv import load_dotenv
 
 CHROMA_DIR = os.getenv("CHROMA_DIR", "./chroma_store")
 load_dotenv()
 
 def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, Any]]:
-    search = arxiv.Search(query=topic, max_results=limit, sort_by=arxiv.SortCriterion.SubmittedDate)
-    papers = []
-    for r in search.results():
-        papers.append({
-            "id": r.get_short_id(),
-            "title": r.title,
-            "abstract": r.summary,
-            "url": r.entry_id,
-            "published_at": r.updated.date().isoformat()
-        })
+    # Build the search; we'll filter by date ourselves
+    search = arxiv.Search(
+        query=topic,
+        max_results=limit,  # library still paginates under the hood
+        sort_by=arxiv.SortCriterion.SubmittedDate,
+    )
+
+    # More resilient client: smaller pages + retries + polite delay
+    client = arxiv.Client(page_size=25, delay_seconds=1, num_retries=3)
+
+    cutoff = dt.date.today() - dt.timedelta(days=days)
+    papers: List[Dict[str, Any]] = []
+
+    try:
+        for r in client.results(search):
+            # Optional date filter (your old code ignored `days`)
+            pub_date = (r.updated or r.published).date()
+            if pub_date < cutoff:
+                continue
+
+            papers.append({
+                "id": r.get_short_id(),
+                "title": r.title,
+                "abstract": r.summary,
+                "url": r.entry_id,
+                "published_at": pub_date.isoformat(),
+            })
+
+            if len(papers) >= limit:
+                break
+
+    except arxiv.UnexpectedEmptyPageError:
+        # arXiv served an empty page mid-iteration; return what we have
+        pass
+    except Exception as e:
+        # Surface other issues (network, rate limits) as a 500 you can see
+        raise RuntimeError(f"arXiv fetch failed: {e}")
+
     return papers
 
+    
 def get_chroma():
     client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
     return client.get_or_create_collection("papers")

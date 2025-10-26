@@ -74,7 +74,7 @@ export default function Page() {
         <div className="flex gap-4 justify-center">
           <a
             href="/?view=browse"
-            className="group relative h-12 px-8 border border-white/10 rounded-xl font-medium transition-all flex items-center justify-center overflow-hidden bg-gray-900/50 hover:bg-gray-800/50 hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/20"
+            className="group relative h-12 px-8 border border-white/10 rounded-xl font-medium transition-all flex items-center justify-center overflow-hidden bg-gray-900/50"
           >
             <span className="relative z-10 text-gray-200 group-hover:text-white transition-colors">
               Browse
@@ -83,7 +83,7 @@ export default function Page() {
 
           <a
             href="/?view=digest"
-            className="h-12 px-8 bg-foreground text-background rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center"
+            className="h-12 px-8 bg-foreground text-background rounded-xl font-medium transition-all flex items-center justify-center"
           >
             <span className="relative z-10 text-black font-semibold">
               Digest

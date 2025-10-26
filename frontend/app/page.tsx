@@ -6,9 +6,10 @@ import { createDigest, getLatest, listPapers } from "../lib/fetch"
 import { PaperCard, DigestPaper } from "../components/paper-card"
 import { Search, Loader2, FileText, Github, RefreshCw } from "lucide-react"
 import HeroSection from "../components/HeroSection"
-import { DigestSearchCombobox } from "../components/digest-search-combobox"
+//import { DigestSearchCombobox } from "../components/digest-search-combobox"
 import { DigestFrequencySelect, type DigestFrequency, frequencies } from "../components/digest-frequency-select"
 import { BrowseSearchBox } from "../components/browse-search-box"
+import HighlightToSpeech from "../components/HighlightToSpeech"
 
 const WEEKLY_DAYS = 7
 const MONTHLY_DAYS = 30
@@ -729,8 +730,18 @@ export default function Page() {
   const view = searchParams.get("view")
 
   if (!view) {
-    return <HomeView />
+    return (
+      <>
+        <HomeView />
+        <HighlightToSpeech />
+      </>
+    )
   }
 
-  return view === "digest" ? <DigestView /> : <BrowseView />
+  return (
+    <>
+      {view === "digest" ? <DigestView /> : <BrowseView />}
+      <HighlightToSpeech />
+    </>
+  )
 }

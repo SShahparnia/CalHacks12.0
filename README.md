@@ -1,19 +1,16 @@
-# Kensa
+# PaperLink
 
-Kensa is an AI-powered research companion that fetches new arXiv papers, clusters them by theme, and generates a concise weekly digest with optional text-to-speech narration. It is designed to help researchers and students stay informed without the noise or overload.
-
-Built during CalHacks 12.0, powered by Claude 3.5, Chroma, and V0 by Vercel.
+PaperLink is an AI-powered research companion built at CalHacks 12.0. Give it a topic and it pulls the latest arXiv submissions, clusters them by theme, and asks Claude 3.5 to write a concise weekly briefing you can scan or share. A FastAPI backend handles ingestion, embeddings, and caching while a Next.js frontend presents the digest.
 
 ---
 
-## Features
+## Highlights
 
-- Fetches the latest papers from arXiv by topic  
-- Clusters related papers using MiniLM and Chroma  
-- Generates readable digests with Claude 3.5 Sonnet  
-- Optional spoken digest using Fish Audio (TTS)  
-- Caches digests locally with SQLite  
-- Clean and responsive V0 frontend built with Next.js and Tailwind
+- Track new arXiv papers for any topic with a single request
+- Cluster related work using MiniLM embeddings stored in Chroma
+- Summarize each cluster and the overall week with Claude 3.5 Sonnet
+- Cache past digests in SQLite for instant reloads
+- Optional Fish Audio TTS hook (stubbed in repo and ready for integration)
 
 ---
 
@@ -21,35 +18,43 @@ Built during CalHacks 12.0, powered by Claude 3.5, Chroma, and V0 by Vercel.
 
 | Layer | Tools |
 |-------|-------|
-| Frontend | V0 by Vercel (Next.js, Tailwind) |
+| Frontend | Next.js 14 (App Router, React 18) |
 | Backend | FastAPI, Uvicorn |
-| Database | SQLite |
-| Embeddings | Sentence Transformers (all-MiniLM-L6-v2) |
-| Vector Store | Chroma |
-| LLM | Claude 3.5 Sonnet (API) |
-| Text to Speech | Fish Audio (Fish Speech TTS) |
+| Database | SQLite (`backend/kensa.db`) |
+| Vector Store | Chroma (persistent client) |
+| Embeddings | Sentence Transformers (`all-MiniLM-L6-v2`) |
+| LLM | Claude 3.5 Sonnet (Anthropic API) |
+| Text to Speech | Fish Audio / Fish Speech (optional) |
 
 ---
 
-## Setup
+## Getting Started
 
-### 1. Clone the repository
+### 1. Clone
 ```bash
-git clone https://github.com/yourusername/kensa.git
-cd kensa
+git clone https://github.com/yourusername/paperlink.git
+cd paperlink
 ```
 
-### 2. Backend Setup
-Create and activate a virtual environment, then install dependencies:
+### 2. Backend (FastAPI)
 ```bash
+cd backend
 python -m venv .venv
 source .venv/bin/activate
-pip install fastapi uvicorn[standard] python-arxiv sentence-transformers chromadb scikit-learn anthropic sqlite-utils requests
+pip install -r requirements.txt
 ```
 
-Run the backend:
+Create `backend/.env` with at least:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+# Optional overrides
+# DATABASE_URL=backend/kensa.db
+# CHROMA_DIR=./chroma_store
+```
+
+Run the API:
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8000
 ```
 
 #### Cloud digest cache (optional)
@@ -73,23 +78,38 @@ Leave `DIGEST_CACHE_BACKEND` unset (or `sqlite`) to keep using the local `backen
 ### 3. Frontend Setup
 From the `frontend` directory:
 ```bash
+cd ../frontend
 npm install
+```
+
+Configure `frontend/.env.local`:
+```
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:8000
+```
+
+Start the dev server:
+```bash
 npm run dev
 ```
 
+Visit `http://localhost:3000` and generate a digest.
+
 ---
 
-## API Overview
+## API Reference
 
-**POST /api/digest/generate**  
-Generates a digest for a given topic.
+- `GET /api/health` – simple readiness check  
+- `POST /api/digest` – generate a fresh digest  
+- `GET /api/digest/latest?topic=<topic>` – fetch the most recent cached digest
 
-**Body Example:**
+### `POST /api/digest`
+
+**Body**
 ```json
-{ "topic": "diffusion models", "days": 7 }
+{ "topic": "diffusion models", "days": 7, "voice": false }
 ```
 
-**Response Example:**
+**Response**
 ```json
 {
   "digestId": "dg_123",
@@ -98,93 +118,55 @@ Generates a digest for a given topic.
     {
       "label": "Efficient Training",
       "bullets": ["LoRA variants reduce memory", "Faster gradient methods"],
-      "papers": [
-        {"id": "2501.12345", "title": "Improving Diffusion", "url": "https://arxiv.org/abs/2501.12345"}
+      "topPapers": [
+        { "title": "Improving Diffusion", "url": "https://arxiv.org/abs/2501.12345", "why": "Parameter-efficient finetuning" }
       ]
     }
   ],
-  "audioUrl": "https://.../dg_123.mp3"
+  "audioUrl": null
 }
 ```
-
----
-
-## Using Chroma for Paper Storage and Retrieval
-
-Kensa uses **Chroma** as its vector database to store and retrieve paper embeddings.
-
-```python
-import chromadb
-from sentence_transformers import SentenceTransformer
-
-client = chromadb.Client()
-collection = client.get_or_create_collection("papers")
-
-model = SentenceTransformer("all-MiniLM-L6-v2")
-
-texts = [p["abstract"] for p in papers]
-embeddings = model.encode(texts)
-
-collection.add(
-    ids=[p["id"] for p in papers],
-    embeddings=embeddings.tolist(),
-    metadatas=[{"title": p["title"], "url": p["url"]} for p in papers],
-    documents=texts
-)
-
-# Query examples
-query_results = collection.query(
-    query_texts=["diffusion training efficiency"],
-    n_results=10
-)
-```
-
-Chroma automatically persists your embeddings and metadata to a local `.chroma/` directory, so no additional storage setup is required.
 
 ---
 
 ## Project Structure
 
 ```
-kensa/
+paperlink/
 ├── backend/
-│   ├── main.py
-│   ├── arxiv_ingest.py
-│   ├── clustering.py
-│   ├── claude_client.py
-│   ├── database.py
-│   ├── chroma_store.py
-│   └── tts_fish_audio.py
+│   ├── main.py           # FastAPI entry point
+│   ├── services.py       # arXiv fetch, embeddings, clustering, Claude calls
+│   ├── db.py             # SQLite helpers and schema
+│   ├── prompts.py        # Prompt templates for Claude
+│   ├── chroma_store/     # Persistent Chroma collection
+│   └── requirements.txt
 ├── frontend/
-│   ├── app/
-│   │   └── kensa/
-│   │       ├── page.tsx
-│   │       └── components/
-│   │           ├── TopicBar.tsx
-│   │           ├── ClusterCard.tsx
-│   │           ├── DigestPlayer.tsx
-│   │           └── LoadingSkeleton.tsx
-└── data/
-    ├── papers.db
-    └── digests/
+│   ├── app/page.tsx      # PaperLink UI (App Router)
+│   ├── lib/fetch.ts      # Client helpers that call the API
+│   └── package.json
+├── docs/
+│   └── planning.md
+└── README.md
 ```
 
 ---
 
-## Example Prompts
+## Prompt Templates
 
-**Cluster Summarization Prompt**
+**Cluster Summaries**
 ```
 You are an academic editor. For each cluster, return JSON in the following format:
-{
-  "label": "<5 words>",
-  "bullets": ["<12 words>", "<12 words>", "<12 words>"],
-  "topPapers": [{"title": "...", "why": "<12 words>"}]
-}
+[
+  {
+    "label": "<5 words>",
+    "bullets": ["<12 words>", "<12 words>", "<12 words>"],
+    "topPapers": [{"title": "...", "why": "<12 words>"}]
+  }
+]
 Use only the provided titles and abstracts. Be factual and concise.
 ```
 
-**Digest Prompt**
+**Digest Writer**
 ```
 Write a weekly digest for "{topic}" in 450 tokens or less:
 1. Overview paragraph summarizing the week
@@ -195,30 +177,9 @@ Return plain text only.
 
 ---
 
-## Text to Speech Integration (Fish Audio)
-
-Kensa uses **Fish Audio (Fish Speech)** to generate high-quality spoken digests.
-
-**Installation**
-```bash
-pip install fish-audio
-```
-
-**Example Usage**
-```python
-from fish_audio import FishTTS
-
-tts = FishTTS()
-tts.generate("This week in AI safety, researchers introduced new alignment methods...", "output.mp3")
-```
-
-The generated MP3 can be served directly through the `/api/tts` endpoint and played in the frontend audio component.
-
----
-
 ## Contributing
 
-Pull requests are welcome. For major changes, please open an issue first to discuss the proposed changes.
+Pull requests are welcome. Please open an issue first for major changes so we can align on the approach.
 
 ---
 

@@ -4,11 +4,12 @@ export async function POST(request: NextRequest) {
   try {
     const { text } = await request.json()
 
-    if (!text) {
+    if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "Text is required" }, { status: 400 })
     }
 
     const API_KEY = process.env.NEXT_PUBLIC_FISH_AUDIO_KEY
+
     if (!API_KEY) {
       console.error("NEXT_PUBLIC_FISH_AUDIO_KEY is not set")
       return NextResponse.json({ error: "API key not configured" }, { status: 500 })
@@ -35,10 +36,7 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text()
       console.error("Fish Audio API error:", response.status, errorText)
-      return NextResponse.json(
-        { error: `Fish Audio API error: ${response.status}` },
-        { status: response.status }
-      )
+      return NextResponse.json({ error: `Fish Audio API error: ${response.status}` }, { status: response.status })
     }
 
     // Stream the audio response back to the client
@@ -52,9 +50,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("TTS API route error:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

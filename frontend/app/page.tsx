@@ -592,10 +592,47 @@ function DigestView() {
                 <div className="flex items-center gap-2">
                   {/* Frequency selector on the left */}
                   <DigestFrequencySelect
-                    value={frequency}
-                    onChange={setFrequency}
-                    disabled={busy}
-                  />
+  value={frequency}
+  onChange={(newFreq) => {
+    setFrequency(newFreq)
+    if (topic.trim() && !busy) {
+      const selected = frequencies.find((f) => f.value === newFreq)
+      const days = selected?.days || 7
+      let period: "weekly" | "monthly" = "weekly"
+      if (newFreq === "monthly" || newFreq === "yearly") {
+        period = "monthly"
+      }
+
+      // trigger regeneration manually with the *new* frequency
+      void (async () => {
+        setLoading(true)
+        setError(null)
+        try {
+          const data = await createDigest(topic.trim(), {
+            days,
+            topK: 5,
+            period,
+          })
+          setDigest(data)
+          const params = new URLSearchParams({
+            view: "digest",
+            topic,
+            period: newFreq,
+            days: String(days),
+          })
+          router.replace(`/?${params.toString()}`)
+        } catch (e: any) {
+          setDigest(null)
+          setError(e?.message || "Failed to generate digest")
+        } finally {
+          setLoading(false)
+        }
+      })()
+    }
+  }}
+  disabled={busy}
+/>
+
                   {recentTopics.length > 0 && (
                     <button
                       onClick={() => setShowRecentTopics(true)}

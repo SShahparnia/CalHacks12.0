@@ -13,7 +13,9 @@ from chroma_client import get_collection
 load_dotenv()
 CHROMA_PAPERS_COLLECTION = os.getenv("CHROMA_PAPERS_COLLECTION", "papers")
 CLUSTER_BATCH_SIZE = max(1, int(os.getenv("CLUSTER_BATCH_SIZE", "4")))
-LABEL_MAX_TOKENS = max(100, int(os.getenv("LABEL_MAX_TOKENS", "350")))
+LABEL_MAX_TOKENS = max(100, int(os.getenv("LABEL_MAX_TOKENS", "750")))
+CLAUDE_MAX_TOKENS = max(200, int(os.getenv("CLAUDE_MAX_TOKENS", "750")))
+TOP_PAPER_MAX_CHARS = int(os.getenv("TOP_PAPER_MAX_CHARS", "420"))
 
 def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, Any]]:
     # Build the search; we'll filter by date ourselves
@@ -175,7 +177,7 @@ def clusters_to_payload(papers: List[Dict[str, Any]], embeds: np.ndarray, labels
         })
     return payload
 
-def call_claude(prompt: str, system: str = "You are a concise academic editor.", max_tokens: int = 800) -> str:
+def call_claude(prompt: str, system: str = "You are a concise academic editor.", max_tokens: Optional[int] = None) -> str:
     lava_token = os.getenv("LAVA_FORWARD_TOKEN")
     lava_base = os.getenv("LAVA_BASE_URL", "https://api.lavapayments.com/v1")
     
@@ -192,8 +194,8 @@ def call_claude(prompt: str, system: str = "You are a concise academic editor.",
     }
     
     payload = {
-        "model": "claude-sonnet-4-20250514",
-        "max_tokens": max_tokens,
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": max_tokens or CLAUDE_MAX_TOKENS,
         "temperature": 0.4,
         "system": system,
         "messages": [{"role": "user", "content": prompt}]
@@ -238,10 +240,21 @@ def label_clusters_with_claude(cluster_payload: List[Dict[str, Any]], cluster_pr
         _send(batch)
     return out
 
-def compose_digest(topic: str, days: int, top_k: int, labeled_clusters: List[Dict[str, Any]], prompt_template: str) -> str:
-    compact = [{"label": c.get("label","Cluster"), "bullets": c.get("bullets", [])} for c in labeled_clusters]
+def compose_digest(
+    topic: str,
+    days: int,
+    top_k: int,
+    labeled_clusters: List[Dict[str, Any]],
+    prompt_template: str,
+    top_papers: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    compact = [{"label": c.get("label", "Cluster"), "bullets": c.get("bullets", [])} for c in labeled_clusters]
     prompt = prompt_template.format(topic=topic, days=days, top_k=top_k)
-    return call_claude(prompt + "\n\nCLUSTERS:\n" + json.dumps(compact, ensure_ascii=False))
+    payload = (
+        f"{prompt}\n\nTOP_PAPERS:\n{json.dumps(top_papers or [], ensure_ascii=False)}"
+        f"\n\nCLUSTERS:\n{json.dumps(compact, ensure_ascii=False)}"
+    )
+    return call_claude(payload)
 
 def maybe_tts_fish_audio(text: str) -> Optional[str]:
     return None
@@ -249,6 +262,16 @@ def maybe_tts_fish_audio(text: str) -> Optional[str]:
 
 def _normalize_title(title: str) -> str:
     return re.sub(r"\s+", " ", title or "").strip().lower()
+
+
+def _truncate(text: Optional[str], limit: int = TOP_PAPER_MAX_CHARS) -> Optional[str]:
+    if not text:
+        return None
+    clean = text.strip()
+    if len(clean) <= limit:
+        return clean
+    snippet = clean[:limit].rsplit(" ", 1)[0]
+    return snippet + "…"
 
 
 def enrich_top_papers(labeled_clusters: List[Dict[str, Any]], papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -285,3 +308,53 @@ def enrich_top_papers(labeled_clusters: List[Dict[str, Any]], papers: List[Dict[
                 top.append(fallback)
         cluster["topPapers"] = top
     return labeled_clusters
+
+
+def select_top_papers(
+    labeled_clusters: List[Dict[str, Any]],
+    papers: List[Dict[str, Any]],
+    top_k: int,
+) -> List[Dict[str, Any]]:
+    """
+    Build a flat list of the most representative papers so the digest prompt
+    can reference concrete titles instead of hallucinating.
+    """
+    seen: set[str] = set()
+    ranked: List[Dict[str, Any]] = []
+
+    def _add(entry: Dict[str, Any]) -> None:
+        title = entry.get("title")
+        if not title:
+            return
+        key = (
+            entry.get("arxivId")
+            or entry.get("id")
+            or entry.get("url")
+            or _normalize_title(title)
+        )
+        if not key or key in seen:
+            return
+        seen.add(str(key))
+        ranked.append(
+            {
+                "title": title,
+                "summary": _truncate(entry.get("summary") or entry.get("why") or entry.get("abstract")),
+                "url": entry.get("url"),
+                "arxivId": entry.get("arxivId") or entry.get("id"),
+                "authors": entry.get("authors"),
+                "published": entry.get("published") or entry.get("published_at"),
+            }
+        )
+
+    for cluster in labeled_clusters or []:
+        for candidate in cluster.get("topPapers", []):
+            _add(candidate)
+            if len(ranked) >= top_k:
+                return ranked[:top_k]
+
+    for paper in papers:
+        _add(paper)
+        if len(ranked) >= top_k:
+            break
+
+    return ranked[:top_k]

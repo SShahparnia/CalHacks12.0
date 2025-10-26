@@ -12,7 +12,7 @@ export default function Page() {
         <div className="flex gap-4 justify-center">
           <Link
             href="/?view=browse"
-            className="h-12 px-8 bg-secondary text-secondary-foreground border border-border rounded-xl font-medium hover:bg-muted transition-all flex items-center justify-center"
+            className="h-12 px-8 bg-secondary white border border-border rounded-xl font-medium hover:bg-muted transition-all flex items-center justify-center"
           >
             Browse
           </Link>

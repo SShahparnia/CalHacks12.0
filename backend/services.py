@@ -6,7 +6,7 @@ from sklearn.cluster import KMeans
 import numpy as np
 import chromadb
 from chromadb.config import Settings
-from anthropic import Anthropic
+import requests  # Add this import
 import datetime as dt
 from dotenv import load_dotenv
 
@@ -116,20 +116,40 @@ def clusters_to_payload(papers: List[Dict[str, Any]], embeds: np.ndarray, labels
     return payload
 
 def call_claude(prompt: str, system: str = "You are a concise academic editor.", max_tokens: int = 800) -> str:
-    key = os.getenv("ANTHROPIC_API_KEY")
-    if not key:
-        raise RuntimeError("Missing ANTHROPIC_API_KEY in backend/.env")
-
-    client = Anthropic(api_key=key)
-    msg = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        temperature=0.4,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    # Anthropic Python SDK returns content blocks; take the first text block
-    return msg.content[0].text if msg.content else ""
+    lava_token = os.getenv("LAVA_FORWARD_TOKEN")
+    lava_base = os.getenv("LAVA_BASE_URL", "https://api.lavapayments.com/v1")
+    
+    if not lava_token:
+        raise RuntimeError("Missing LAVA_FORWARD_TOKEN in backend/.env")
+    
+    # Build Lava URL that routes to Anthropic
+    url = f"{lava_base}/forward?u=https://api.anthropic.com/v1/messages"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {lava_token}",
+        "anthropic-version": "2023-06-01"
+    }
+    
+    payload = {
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": max_tokens,
+        "temperature": 0.4,
+        "system": system,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    
+    response = requests.post(url, headers=headers, json=payload)
+    
+    # Log Lava request ID for tracking
+    request_id = response.headers.get("x-lava-request-id")
+    print(f"Lava request ID: {request_id}")
+    
+    if response.status_code != 200:
+        raise RuntimeError(f"Lava/Anthropic API error: {response.text}")
+    
+    data = response.json()
+    return data["content"][0]["text"] if data.get("content") else ""
 
 def label_clusters_with_claude(cluster_payload: List[Dict[str, Any]], cluster_prompt: str) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []

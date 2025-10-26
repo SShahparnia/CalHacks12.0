@@ -4,14 +4,16 @@ import arxiv
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 import numpy as np
-import chromadb
-from chromadb.config import Settings
 import requests  # Add this import
 import datetime as dt
 from dotenv import load_dotenv
 
-CHROMA_DIR = os.getenv("CHROMA_DIR", "./chroma_store")
+from chroma_client import get_collection
+
 load_dotenv()
+CHROMA_PAPERS_COLLECTION = os.getenv("CHROMA_PAPERS_COLLECTION", "papers")
+CLUSTER_BATCH_SIZE = max(1, int(os.getenv("CLUSTER_BATCH_SIZE", "4")))
+LABEL_MAX_TOKENS = max(100, int(os.getenv("LABEL_MAX_TOKENS", "350")))
 
 def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, Any]]:
     # Build the search; we'll filter by date ourselves
@@ -56,25 +58,85 @@ def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, An
     return papers
 
 
-def get_chroma():
-    client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
-    return client.get_or_create_collection("papers")
+def get_papers_collection():
+    return get_collection(CHROMA_PAPERS_COLLECTION)
 
 _embed_model = None
 def embed_texts(texts: List[str]) -> np.ndarray:
     global _embed_model
     if _embed_model is None:
         _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return np.asarray(_embed_model.encode(texts))
+    return np.asarray(_embed_model.encode(texts), dtype=np.float32)
+
+def fetch_or_create_embeddings(papers: List[Dict[str, Any]]) -> np.ndarray:
+    """
+    Return embeddings for the provided papers, re-using any vectors already persisted in Chroma.
+    """
+    if not papers:
+        return np.empty((0, 0), dtype=np.float32)
+
+    col = get_papers_collection()
+    ids = [p["id"] for p in papers]
+    existing_map: Dict[str, np.ndarray] = {}
+
+    try:
+        existing = col.get(ids=ids, include=["embeddings"])
+        if existing and existing.get("ids"):
+            for idx, pid in enumerate(existing["ids"]):
+                embeds = existing.get("embeddings") or []
+                if idx < len(embeds) and embeds[idx] is not None:
+                    existing_map[pid] = np.asarray(embeds[idx], dtype=np.float32)
+    except Exception:
+        # If Chroma is unavailable, fall back to re-embedding everything.
+        existing_map = {}
+
+    embeddings: List[Optional[np.ndarray]] = [None] * len(papers)
+    new_indices: List[int] = []
+    for i, paper in enumerate(papers):
+        cached = existing_map.get(paper["id"])
+        if cached is not None:
+            embeddings[i] = cached
+        else:
+            new_indices.append(i)
+
+    if new_indices:
+        texts = [papers[i]["abstract"] for i in new_indices]
+        new_embeds = embed_texts(texts)
+        for offset, idx in enumerate(new_indices):
+            embeddings[idx] = new_embeds[offset]
+
+        upsert_chroma(
+            [papers[i] for i in new_indices],
+            np.asarray([embeddings[i] for i in new_indices], dtype=np.float32)
+        )
+
+    # All entries should now be populated; stack them into a single array.
+    return np.vstack(embeddings).astype(np.float32)
 
 def upsert_chroma(papers: List[Dict[str, Any]], embeds: np.ndarray) -> None:
-    col = get_chroma()
+    col = get_papers_collection()
     ids = [p["id"] for p in papers]
-    col.add(
-        ids=ids,
-        documents=[p["abstract"] for p in papers],
-        embeddings=[e.tolist() for e in embeds],
-        metadatas=[{"title": p["title"], "url": p["url"]} for p in papers]
+    existing_ids = set()
+    try:
+        existing = col.get(ids=ids)
+        if existing and existing.get("ids"):
+            existing_ids.update(existing["ids"])
+    except Exception:
+        existing_ids = set()
+
+    to_store = [
+        (idx, paper_id)
+        for idx, paper_id in enumerate(ids)
+        if paper_id not in existing_ids
+    ]
+    if not to_store:
+        return
+    indices = [idx for idx, _ in to_store]
+    col.upsert(
+        ids=[ids[idx] for idx in indices],
+        documents=[papers[idx]["abstract"] for idx in indices],
+        embeddings=[embeds[idx].tolist() for idx in indices],
+        metadatas=[{"title": papers[idx]["title"], "url": papers[idx]["url"]} for idx in indices]
     )
 
 def cluster_embeddings(embeds: np.ndarray, k: int = 6):
@@ -107,8 +169,6 @@ def clusters_to_payload(papers: List[Dict[str, Any]], embeds: np.ndarray, labels
                     "abstract": papers[i]["abstract"],
                     "url": papers[i]["url"],
                     "id": papers[i]["id"],
-                    "published_at": papers[i]["published_at"],
-                    "authors": papers[i].get("authors"),
                 }
                 for i in top
             ],
@@ -155,26 +215,27 @@ def label_clusters_with_claude(cluster_payload: List[Dict[str, Any]], cluster_pr
     out: List[Dict[str, Any]] = []
     batch: List[Dict[str, Any]] = []
     import json as _json
-    for c in cluster_payload:
-        batch.append(c)
-        if len(batch) == 2:
-            text = _json.dumps(batch, ensure_ascii=False)
-            raw = call_claude(f"{cluster_prompt}\n\nCLUSTERS:\n{text}")
-            try:
-                arr = _json.loads(raw)
-                if isinstance(arr, list):
-                    out.extend(arr)
-            except Exception:
-                pass
-            batch = []
-    if batch:
-        raw = call_claude(f"{cluster_prompt}\n\nCLUSTERS:\n{json.dumps(batch, ensure_ascii=False)}")
+
+    def _send(payload: List[Dict[str, Any]]) -> None:
+        if not payload:
+            return
+        text = _json.dumps(payload, ensure_ascii=False)
+        raw = call_claude(f"{cluster_prompt}\n\nCLUSTERS:\n{text}", max_tokens=LABEL_MAX_TOKENS)
         try:
-            arr = json.loads(raw)
+            arr = _json.loads(raw)
             if isinstance(arr, list):
                 out.extend(arr)
         except Exception:
+            # If Claude returns malformed JSON, skip this batch; caller can decide how to handle empty clusters.
             pass
+
+    for cluster in cluster_payload:
+        batch.append(cluster)
+        if len(batch) >= CLUSTER_BATCH_SIZE:
+            _send(batch)
+            batch = []
+    if batch:
+        _send(batch)
     return out
 
 def compose_digest(topic: str, days: int, top_k: int, labeled_clusters: List[Dict[str, Any]], prompt_template: str) -> str:

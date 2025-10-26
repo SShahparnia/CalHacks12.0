@@ -9,24 +9,25 @@ You receive structured context:
 - TOP_PAPERS: JSON array with title, summary, url, authors, and published date.
 - CLUSTERS: JSON array with labels and supporting bullets.
 Use ONLY this material—do not fabricate papers.
+Constraints:
+- HARD CAP: ≤680 tokens. Aim ~600.
+- Short sentences (≤20 words). No filler. No meta.
+- End with "### END".
+
 If fewer than {top_k} papers are provided, list the available ones and note the shortfall once.
-Each section should feel substantial (3–5 sentences minimum) and analytical.
+Each section should feel substantial (3 sentences maximum) and analytical.
 Reference specific papers with inline numeric citations of the form `[1]`, `[2]`, etc., where the number maps to the item’s position in the “Top {top_k} Papers” list. When linking, wrap the paper title in markdown, e.g. `[Paper Title](url)[2]`.
 Structure the markdown exactly as follows:
 # Weekly Brief: {topic}
 ### Executive Summary
 - one paragraph synthesizing the week's overarching theme, citing the most relevant papers (e.g., `[1][3]`).
 ### Top {top_k} Papers
-- Present a numbered list (1. …) drawn from TOP_PAPERS. Each item must include a markdown-linked title (if URL exists) followed by exactly one sentence (<35 words) summarizing the contribution, ending with a citation tag `[n]` and optional author/date parenthetical. No extra text.
+- Present a list of max 3 all drawn from TOP_PAPERS. Each item must include a markdown-linked title (if URL exists) followed by exactly one sentence (<35 words) summarizing the contribution, ending with a citation tag `[n]` and optional author/date parenthetical. No extra text.
 ### What to Watch Next
 - Provide three detailed bullets covering emerging risks/opportunities, each referencing at least one cited paper or concrete data point.
-### Signals & Noise
-- Add two paragraphs: one highlighting genuinely novel signals (cite specific papers), and one calling out missing data, contradictory findings, or hype to be cautious about.
-### Benchmarks & Metrics
-- Summarize any quantitative results (accuracy, throughput, cost, energy, etc.) reported in TOP_PAPERS. Include exact numbers and citations; if none exist, explicitly state “No benchmark deltas reported this week.”
 ### Spotlight Keywords
-- End with at least five multi-word keyword phrases. For each phrase, add a short clause describing why it matters and include an inline markdown link to the most relevant paper (reuse the existing citation number, e.g., `[Scalable CUDA kernels](url)[1]`). Ensure keywords reflect distinct themes from the brief. Keep each bullet under 20 words.
-Keep the entire brief under 900 words. Maintain a concise yet rich, academic, and insight-driven tone. Do not invent papers or citations beyond supplied data.
+- End with at least three  multi-word keyword phrases. For each phrase, add a short clause describing why it matters and include an inline markdown link to the most relevant paper (reuse the existing citation number, e.g., `[Scalable CUDA kernels](url)[1]`). Ensure keywords reflect distinct themes from the brief. Keep each bullet under 20 words.
+Keep the entire brief under 500 words. Maintain a concise yet rich, academic, and insight-driven tone. Do not invent papers or citations beyond supplied data.
 """
 
 MONTHLY_DIGEST_PROMPT = """Write a "Top Papers of the Month" briefing for "{topic}" focusing on major advancements from the last {days} days.

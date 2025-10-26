@@ -171,6 +171,98 @@ function BrowseView() {
   )
 }
 
+function escapeKey(i: number) {
+  return `mk-${i}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+// Render [text](url), **bold**, *italic*, and bare http(s):// links
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  let rest = text
+  let key = 0
+
+
+  // One pass for links, bold, italics, and bare URLs
+  // Order matters: link -> bold -> italic -> url
+  const patterns: { type: "link" | "bold" | "italic" | "url"; re: RegExp }[] = [
+    { type: "link",  re: /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/ },
+    { type: "bold",  re: /\*\*([^*]+)\*\*/ },
+    { type: "italic",re: /\*([^*]+)\*/ },
+    { type: "url",   re: /(https?:\/\/[^\s)]+)(?!\))/ },
+  ]
+
+  // Greedy incremental parse
+  while (rest.length) {
+    let earliestIdx = -1
+    let earliestMatch: RegExpMatchArray | null = null
+    let earliestType: typeof patterns[number]["type"] | null = null
+
+    for (const { type, re } of patterns) {
+      const m = rest.match(re)
+      if (!m) continue
+      const idx = m.index ?? -1
+      if (idx >= 0 && (earliestIdx < 0 || idx < earliestIdx)) {
+        earliestIdx = idx
+        earliestMatch = m
+        earliestType = type
+      }
+    }
+
+    if (!earliestMatch || earliestType == null) {
+      // No more patterns → push remainder and break
+      nodes.push(rest)
+      break
+    }
+
+    // Push plain text before the match
+    if (earliestIdx > 0) nodes.push(rest.slice(0, earliestIdx))
+
+    const k = escapeKey(key++)
+    const [full, g1, g2] = earliestMatch
+
+    switch (earliestType) {
+      case "link":
+        nodes.push(
+          <a
+            key={k}
+            href={g2}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-muted-foreground hover:decoration-current underline-offset-2"
+          >
+            {g1}
+          </a>
+        )
+        break
+      case "bold":
+        nodes.push(<strong key={k}>{g1}</strong>)
+        break
+      case "italic":
+        nodes.push(<em key={k}>{g1}</em>)
+        break
+      case "url":
+        nodes.push(
+          <a
+            key={k}
+            href={g1}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-muted-foreground hover:decoration-current underline-offset-2"
+          >
+            {g1}
+          </a>
+        )
+        break
+    }
+
+    // Advance the cursor
+    rest = rest.slice((earliestMatch.index ?? 0) + full.length)
+  }
+
+  return nodes
+}
+
 function buildDigestSummaryNodes(summary: string): ReactNode[] {
   const lines = summary.split("\n")
   const nodes: ReactNode[] = []
@@ -179,80 +271,91 @@ function buildDigestSummaryNodes(summary: string): ReactNode[] {
   let key = 0
 
   const flushList = () => {
+
     if (list.length === 0) return
     const listKey = key++
     if (listType === "ordered") {
       nodes.push(
-        <ol key={`list-${listKey}`} className="space-y-2 text-muted-foreground list-decimal list-inside">
+        <ol
+          key={`list-${listKey}`}
+          className="list-decimal list-inside space-y-1 text-muted-foreground"
+        >
           {list.map((item, idx) => (
-            <li key={`list-${listKey}-${idx}`} className="leading-relaxed">
-              {item}
+            <li key={`li-${listKey}-${idx}`} className="leading-relaxed">
+              {renderInlineMarkdown(item)}
             </li>
           ))}
-        </ol>,
+        </ol>
       )
     } else {
       nodes.push(
-        <ul key={`list-${listKey}`} className="space-y-2 text-muted-foreground">
+        <ul
+          key={`list-${listKey}`}
+          className="list-disc list-inside space-y-1 text-muted-foreground"
+        >
           {list.map((item, idx) => (
-            <li key={`list-${listKey}-${idx}`} className="flex items-start gap-2">
-              <span className="text-primary mt-1">•</span>
-              <span className="leading-relaxed">{item}</span>
+
+            <li key={`li-${listKey}-${idx}`} className="leading-relaxed">
+              {renderInlineMarkdown(item)}
             </li>
           ))}
-        </ul>,
+        </ul>
+
       )
     }
     list = []
     listType = null
   }
 
-  for (const line of lines) {
-    const trimmed = line.trim()
+  for (const raw of lines) {
+    const trimmed = raw.trim()
     if (!trimmed) {
       flushList()
       continue
     }
+
+
+    // Ordered list line: "1. foo"
     if (/^\d+\.\s+/.test(trimmed)) {
-      if (listType && listType !== "ordered") {
-        flushList()
-      }
+      if (listType && listType !== "ordered") flushList()
       listType = "ordered"
       list.push(trimmed.replace(/^\d+\.\s+/, ""))
       continue
     }
+
+    // Unordered list line: "- foo" or "* foo"
     if (/^[-*]\s+/.test(trimmed)) {
-      if (listType && listType !== "unordered") {
-        flushList()
-      }
+      if (listType && listType !== "unordered") flushList()
       listType = "unordered"
       list.push(trimmed.replace(/^[-*]\s+/, ""))
       continue
     }
+
     flushList()
+
     if (trimmed.startsWith("### ")) {
       nodes.push(
-        <h4 key={`h4-${key++}`} className="text-base font-semibold text-foreground">
-          {trimmed.replace(/^###\s+/, "")}
-        </h4>,
+        <h4 key={`h4-${key++}`} className="text-base font-semibold text-foreground mt-2">
+          {renderInlineMarkdown(trimmed.replace(/^###\s+/, ""))}
+        </h4>
       )
     } else if (trimmed.startsWith("## ")) {
       nodes.push(
-        <h3 key={`h3-${key++}`} className="text-lg font-semibold text-foreground">
-          {trimmed.replace(/^##\s+/, "")}
-        </h3>,
+        <h3 key={`h3-${key++}`} className="text-lg font-semibold text-foreground mt-2">
+          {renderInlineMarkdown(trimmed.replace(/^##\s+/, ""))}
+        </h3>
       )
     } else if (trimmed.startsWith("# ")) {
       nodes.push(
-        <h2 key={`h2-${key++}`} className="text-2xl font-semibold text-foreground">
-          {trimmed.replace(/^#\s+/, "")}
-        </h2>,
+        <h2 key={`h2-${key++}`} className="text-2xl font-semibold text-foreground mt-2">
+          {renderInlineMarkdown(trimmed.replace(/^#\s+/, ""))}
+        </h2>
       )
     } else {
       nodes.push(
         <p key={`p-${key++}`} className="text-muted-foreground leading-relaxed">
-          {trimmed}
-        </p>,
+          {renderInlineMarkdown(trimmed)}
+        </p>
       )
     }
   }

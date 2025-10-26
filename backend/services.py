@@ -1,4 +1,4 @@
-import os, json
+import os, json, re
 from typing import List, Dict, Any, Optional
 import arxiv
 from sentence_transformers import SentenceTransformer
@@ -40,6 +40,7 @@ def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, An
                 "abstract": r.summary,
                 "url": r.entry_id,
                 "published_at": pub_date.isoformat(),
+                "authors": ", ".join(a.name for a in getattr(r, "authors", []) if getattr(a, "name", None)),
             })
 
             if len(papers) >= limit:
@@ -100,7 +101,17 @@ def clusters_to_payload(papers: List[Dict[str, Any]], embeds: np.ndarray, labels
         top = [i for i, _ in sorted(dists, key=lambda x: x[1])[:3]]
         payload.append({
             "cluster_id": int(cid),
-            "papers": [{"title": papers[i]["title"], "abstract": papers[i]["abstract"], "url": papers[i]["url"]} for i in top]
+            "papers": [
+                {
+                    "title": papers[i]["title"],
+                    "abstract": papers[i]["abstract"],
+                    "url": papers[i]["url"],
+                    "id": papers[i]["id"],
+                    "published_at": papers[i]["published_at"],
+                    "authors": papers[i].get("authors"),
+                }
+                for i in top
+            ],
         })
     return payload
 
@@ -152,3 +163,43 @@ def compose_digest(topic: str, labeled_clusters: List[Dict[str, Any]], digest_pr
 
 def maybe_tts_fish_audio(text: str) -> Optional[str]:
     return None
+
+
+def _normalize_title(title: str) -> str:
+    return re.sub(r"\s+", " ", title or "").strip().lower()
+
+
+def enrich_top_papers(labeled_clusters: List[Dict[str, Any]], papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Merge metadata (url, arxiv id, authors, published date) from the raw arXiv results
+    into the LLM-labeled cluster response so the frontend can render richer cards.
+    """
+    index = {_normalize_title(p["title"]): p for p in papers}
+    for cluster in labeled_clusters:
+        top = []
+        for entry in cluster.get("topPapers", []):
+            title = entry.get("title")
+            if not title:
+                continue
+            paper = index.get(_normalize_title(title))
+            if paper:
+                enriched = {
+                    "title": paper["title"],
+                    "why": entry.get("why"),
+                    "summary": entry.get("why") or paper["abstract"],
+                    "url": paper["url"],
+                    "arxivId": paper["id"],
+                    "published": paper["published_at"],
+                    "authors": paper.get("authors"),
+                    "abstract": paper["abstract"],
+                }
+                for key, value in entry.items():
+                    if key not in enriched and value is not None:
+                        enriched[key] = value
+                top.append(enriched)
+            else:
+                fallback = dict(entry)
+                fallback.setdefault("summary", entry.get("why"))
+                top.append(fallback)
+        cluster["topPapers"] = top
+    return labeled_clusters

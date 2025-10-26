@@ -2,7 +2,7 @@
 
 PaperLink is an AI-powered research companion built at CalHacks 12.0. Give it a topic and it pulls the latest arXiv submissions, clusters them by theme, and asks Claude 4.5 to write a concise weekly briefing you can scan or share. A FastAPI backend handles ingestion, embeddings, and caching while a Next.js frontend presents the digest.
 
-[![Watch the video](https://img.youtube.com/vi/cmQclVAD7i0/maxresdefault.jpg)](https://youtu.be/cmQclVAD7i0)
+Video Demo Link: [here](https://youtu.be/cmQclVAD7i0)
 
 ---
 

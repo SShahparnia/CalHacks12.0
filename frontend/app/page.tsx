@@ -1,11 +1,14 @@
 "use client"
-import { type ReactNode, useEffect, useMemo, useState } from "react"
+import { ReactNode, useEffect, useMemo, useState, useCallback } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createDigest, getLatest, listPapers } from "../lib/fetch"
-import { PaperCard, type DigestPaper } from "../components/paper-card"
-import { Search, Loader2, FileText, RefreshCw } from "lucide-react"
+import { PaperCard, DigestPaper } from "../components/paper-card"
+import { Search, Loader2, FileText, Github, RefreshCw } from "lucide-react"
 import HeroSection from "../components/HeroSection"
-import { NavBar } from "@/components/NavBar"
+import { DigestSearchCombobox } from "../components/digest-search-combobox"
+import { DigestFrequencySelect, type DigestFrequency, frequencies } from "../components/digest-frequency-select"
+import { BrowseSearchBox } from "../components/browse-search-box"
 
 const WEEKLY_DAYS = 7
 const MONTHLY_DAYS = 30
@@ -25,6 +28,39 @@ type DigestResponse = {
   days?: number
   period?: "weekly" | "monthly"
   topK?: number
+}
+
+function AppNav({ active }: { active: "browse" | "digest" | "home" }) {
+  const baseClasses =
+    "px-3 py-1.5 text-sm font-medium rounded-full border border-transparent transition-colors hover:bg-muted"
+  const activeClasses = "text-primary bg-primary/10 border-primary/30"
+  const inactiveClasses = "text-foreground hover:text-primary"
+
+  return (
+    <nav className="fixed top-6 right-6 z-50">
+      <div className="flex items-center gap-1 px-3 py-2 bg-secondary/80 backdrop-blur-lg border border-border rounded-full shadow-lg">
+        <Link href="/" className={`${baseClasses} ${active === "home" ? activeClasses : inactiveClasses}`}>
+          Home
+        </Link>
+        <Link href="/?view=browse" className={`${baseClasses} ${active === "browse" ? activeClasses : inactiveClasses}`}>
+          Browse
+        </Link>
+        <Link href="/?view=digest" className={`${baseClasses} ${active === "digest" ? activeClasses : inactiveClasses}`}>
+          Digest
+        </Link>
+        <div className="w-px h-4 bg-border" />
+        <a
+          href="https://github.com/rohankhatri7/CalHacks12.0"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"
+        >
+          <Github className="h-4 w-4" />
+          GitHub
+        </a>
+      </div>
+    </nav>
+  )
 }
 
 function HomeView() {
@@ -57,6 +93,7 @@ function HomeView() {
 
   return (
     <main className="min-h-screen bg-background">
+      <AppNav active="home" />
       <HeroSection
         topic={topic}
         setTopic={setTopic}
@@ -118,34 +155,48 @@ function BrowseView() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <NavBar active="browse" />
+    <main className="min-h-screen bg-background flex flex-col">
+      <AppNav active="browse" />
 
-      <HeroSection
-        topic={topic}
-        setTopic={setTopic}
-        loading={loading}
-        error={error}
-        generate={() => generate()}
-        goToDigest={goToDigest}
-      />
+      <div className="flex-1 flex items-center justify-center py-8">
+        <div className="w-full max-w-3xl px-6">
+          {/* Title and Description */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-semibold mb-3">Kensa</h1>
+            <p className="text-lg text-muted-foreground">Find and discover research papers.</p>
+          </div>
 
-      {papers.length > 0 ? (
-        <div className="mx-auto max-w-6xl px-6 py-12">
+          <div className="space-y-4">
+            {/* Browse search box */}
+            <BrowseSearchBox
+              topic={topic}
+              setTopic={setTopic}
+              loading={loading}
+              onSearch={generate}
+              onGoToDigest={goToDigest}
+              disabled={loading}
+            />
+
+            {error && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {papers.length > 0 && (
+        <div className="mx-auto max-w-6xl px-6 pb-16">
           <div className="space-y-6">
             {papers.map((paper, idx) => (
-              <PaperCard key={paper.arxivId ?? paper.id ?? idx} paper={paper} />
+              <PaperCard
+                key={paper.arxivId ?? paper.id ?? idx}
+                paper={paper}
+              />
             ))}
           </div>
         </div>
-      ) : (
-        !loading && (
-          <div className="mx-auto max-w-5xl px-6 py-24 text-center">
-            <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold mb-2">No papers found</h2>
-            <p className="text-muted-foreground">Enter a topic above to search for research papers.</p>
-          </div>
-        )
       )}
     </main>
   )
@@ -255,12 +306,99 @@ function DigestView() {
   const initialDays = Number.isNaN(rawDays) ? (initialPeriodParam === "monthly" ? MONTHLY_DAYS : WEEKLY_DAYS) : rawDays
 
   const [topic, setTopic] = useState(initialTopic)
+  const [frequency, setFrequency] = useState<DigestFrequency>("weekly")
+  const [digest, setDigest] = useState<DigestResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [recentTopics, setRecentTopics] = useState<string[]>([])
+  const [showRecentTopics, setShowRecentTopics] = useState(false)
+  
+  // Legacy state for backward compatibility
   const [weeklyDigest, setWeeklyDigest] = useState<DigestResponse | null>(null)
   const [monthlyDigest, setMonthlyDigest] = useState<DigestResponse | null>(null)
   const [weeklyLoading, setWeeklyLoading] = useState(false)
   const [monthlyLoading, setMonthlyLoading] = useState(false)
   const [weeklyError, setWeeklyError] = useState<string | null>(null)
   const [monthlyError, setMonthlyError] = useState<string | null>(null)
+
+  // Load recent topics from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("kensa-recent-topics")
+    if (stored) {
+      try {
+        setRecentTopics(JSON.parse(stored))
+      } catch {
+        // Ignore parse errors
+      }
+    }
+    
+    // Keyboard shortcut for recent topics
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setShowRecentTopics(true)
+      }
+    }
+    
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [])
+
+  // Save topic to recent topics
+  const saveToRecent = useCallback((newTopic: string) => {
+    if (!newTopic.trim()) return
+    setRecentTopics((prev) => {
+      const updated = [newTopic, ...prev.filter((t) => t !== newTopic)].slice(0, 10)
+      localStorage.setItem("kensa-recent-topics", JSON.stringify(updated))
+      return updated
+    })
+  }, [])
+
+  // Main generate digest function
+  async function generateDigest() {
+    const query = topic.trim()
+    if (!query) return
+    
+    const selectedFreq = frequencies.find((f) => f.value === frequency)
+    const days = selectedFreq?.days || 7
+
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // Map frequency to period type that backend expects
+      let period: "weekly" | "monthly" = "weekly"
+      if (frequency === "monthly" || frequency === "yearly") {
+        period = "monthly"
+      }
+      
+      const data = await createDigest(query, { 
+        days, 
+        topK: DEFAULT_TOP_K, 
+        period 
+      })
+      setDigest(data as DigestResponse)
+      saveToRecent(query)
+      
+      // Update URL
+      const params = new URLSearchParams({
+        view: "digest",
+        topic: query,
+        period: frequency,
+        days: String(days),
+      })
+      router.replace(`/?${params.toString()}`)
+    } catch (e: any) {
+      setDigest(null)
+      setError(e?.message || "Failed to generate digest")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleTopicSelect = (selectedTopic: string) => {
+    setTopic(selectedTopic)
+  }
 
   function updateRoute(params: Record<string, string>) {
     const search = new URLSearchParams({ view: "digest", ...params })
@@ -364,248 +502,223 @@ function DigestView() {
   const monthlyClusters = Array.isArray(monthlyDigest?.clusters) ? (monthlyDigest?.clusters as Cluster[]) : []
   const hasWeeklyDigest = weeklyClusters.length > 0 || weeklySummary.trim().length > 0
   const hasMonthlyDigest = monthlyClusters.length > 0 || monthlySummary.trim().length > 0
-  const busy = weeklyLoading || monthlyLoading
+  const busy = weeklyLoading || monthlyLoading || loading
+
+  // Check if we have digest data to display
+  const digestSummary = typeof digest?.summary === "string" ? digest.summary : ""
+  const digestClusters = Array.isArray(digest?.clusters) ? (digest?.clusters as Cluster[]) : []
+  const hasDigest = digestClusters.length > 0 || digestSummary.trim().length > 0
 
   return (
-    <main className="min-h-screen bg-background">
-      <NavBar active="digest" />
+    <main className="min-h-screen bg-background flex flex-col">
+      <AppNav active="digest" />
 
-      <div className="mx-auto max-w-4xl px-6 py-16 space-y-10">
-        <header className="space-y-3 text-center">
-          <h1 className="text-4xl font-bold tracking-tight">Digest Explorer</h1>
-          <p className="text-sm text-muted-foreground">
-            Generate or reload concise weekly and monthly summaries for any research topic.
-          </p>
-        </header>
+      {/* Recent Topics Modal */}
+      {showRecentTopics && recentTopics.length > 0 && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center pt-[20vh] animate-in fade-in"
+          onClick={() => setShowRecentTopics(false)}
+        >
+          <div 
+            className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-2xl mx-4 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <h3 className="font-semibold">Recent Topics</h3>
+              <button
+                onClick={() => setShowRecentTopics(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="max-h-[400px] overflow-y-auto">
+              {recentTopics.map((recentTopic, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setTopic(recentTopic)
+                    setShowRecentTopics(false)
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-muted transition-colors flex items-center gap-3 border-b border-border last:border-b-0"
+                >
+                  <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="flex-1">{recentTopic}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 border rounded-lg px-4 py-3 bg-card/40">
-            <Search className="h-5 w-5 text-muted-foreground" />
-            <input
-              className="w-full bg-transparent focus:outline-none text-base"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. multimodal large language models"
-              onKeyDown={(e) => e.key === "Enter" && loadLatestWeekly()}
-            />
+      <div className="flex-1 flex items-center justify-center py-8">
+        <div className="w-full max-w-3xl px-6">
+          {/* Title and Description */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-semibold mb-3">Kensa</h1>
+            <p className="text-lg text-muted-foreground">Analyze and concisely summarize any research topic.</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => loadLatestWeekly()}
-              disabled={busy || !topic.trim()}
-            >
-              {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              Load Weekly Digest
-            </button>
-            <button
-              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={generateWeeklyDigest}
-              disabled={busy || !topic.trim()}
-            >
-              {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Generate Weekly Digest
-            </button>
-            <button
-              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => loadLatestMonthly()}
-              disabled={busy || !topic.trim()}
-            >
-              {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-              Load Monthly Digest
-            </button>
-            <button
-              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={generateMonthlyDigest}
-              disabled={busy || !topic.trim()}
-            >
-              {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Generate Monthly Digest
-            </button>
+          <div className="space-y-4">
+          {/* Claude-style integrated search box */}
+          <div className="relative">
+            <div className="flex flex-col border-2 border-border rounded-2xl bg-card hover:border-primary/50 focus-within:border-primary transition-colors overflow-hidden">
+              {/* Main text input area - smaller */}
+              <div className="relative flex items-start gap-3 p-4">
+                <div className="flex-1">
+                  <textarea
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault()
+                        if (topic.trim() && !busy) {
+                          generateDigest()
+                        }
+                      }
+                    }}
+                    placeholder="Search topics or paste a query…"
+                    className="w-full min-h-[60px] bg-transparent resize-none outline-none text-base placeholder:text-muted-foreground"
+                    rows={3}
+                  />
+                </div>
+              </div>
+              
+              {/* Bottom toolbar */}
+              <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
+                <div className="flex items-center gap-2">
+                  {/* Frequency selector on the left */}
+                  <DigestFrequencySelect
+                    value={frequency}
+                    onChange={setFrequency}
+                    disabled={busy}
+                  />
+                  {recentTopics.length > 0 && (
+                    <button
+                      onClick={() => setShowRecentTopics(true)}
+                      className="h-8 px-3 rounded-lg hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
+                      title="Recent topics (⌘K)"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Recent
+                    </button>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  {/* Submit button */}
+                  <button
+                    onClick={generateDigest}
+                    disabled={busy || !topic.trim()}
+                    className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                    title="Generate Digest (Enter)"
+                  >
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-4 w-4"
+                      >
+                        <path d="M5 12h14" />
+                        <path d="m12 5 7 7-7 7" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {(weeklyError || monthlyError) && (
+          {error && (
             <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {weeklyError && (
-                <p>
-                  <span className="font-medium">Weekly:</span> {weeklyError}
-                </p>
-              )}
-              {monthlyError && (
-                <p>
-                  <span className="font-medium">Monthly:</span> {monthlyError}
-                </p>
-              )}
+              {error}
             </div>
           )}
+          </div>
         </div>
       </div>
 
-      {hasWeeklyDigest || hasMonthlyDigest ? (
+      {hasDigest && (
         <div className="mx-auto max-w-4xl px-6 pb-16 space-y-12">
-          {hasWeeklyDigest && (
-            <>
-              <section className="border rounded-lg p-6 space-y-4 bg-card/30">
-                <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-2xl font-semibold text-foreground">Weekly Digest</h2>
-                  {weeklyDigest?.digestId && (
-                    <span className="text-xs text-muted-foreground">#{weeklyDigest.digestId}</span>
-                  )}
-                </div>
-                {weeklySummary ? (
-                  <DigestSummary text={weeklySummary} />
-                ) : (
-                  <p className="text-muted-foreground">No summary available.</p>
-                )}
-                {weeklyDigest?.audioUrl && (
-                  <audio controls className="w-full mt-2">
-                    <source src={weeklyDigest.audioUrl} />
-                    Your browser does not support the audio element.
-                  </audio>
-                )}
-              </section>
-
-              {weeklyClusters.map((cluster, clusterIdx) => {
-                const clusterLabel = cluster.label || `Cluster ${clusterIdx + 1}`
-                const topPapers = Array.isArray(cluster.topPapers) ? cluster.topPapers : []
-
-                return (
-                  <section
-                    key={`weekly-cluster-${clusterIdx}-${clusterLabel}`}
-                    className="border rounded-lg p-5 space-y-5"
-                  >
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <h3 className="text-xl font-semibold text-foreground">{clusterLabel}</h3>
-                        {topPapers.length > 0 && (
-                          <span className="text-xs text-muted-foreground/80">
-                            {topPapers.length} featured paper{topPapers.length > 1 ? "s" : ""}
-                          </span>
-                        )}
-                      </div>
-                      {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
-                        <ul className="space-y-2 text-muted-foreground">
-                          {cluster.bullets.map((bullet, bulletIdx) => (
-                            <li
-                              key={`weekly-cluster-${clusterIdx}-bullet-${bulletIdx}`}
-                              className="flex gap-2 items-start"
-                            >
-                              <span className="text-primary mt-1">•</span>
-                              <span className="leading-relaxed">{bullet}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    {topPapers.length > 0 ? (
-                      <div className="space-y-5">
-                        {topPapers.map((paper, paperIdx) => (
-                          <PaperCard
-                            key={`weekly-cluster-${clusterIdx}-paper-${paper.arxivId ?? paper.id ?? paperIdx}`}
-                            paper={paper}
-                            clusterLabel={clusterLabel}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground/80">
-                        No highlighted papers were returned for this cluster.
-                      </p>
-                    )}
-                  </section>
-                )
-              })}
-            </>
-          )}
-
-          {hasMonthlyDigest && (
-            <div className="space-y-6 border-t border-border pt-10">
-              <section className="border rounded-lg p-6 space-y-4 bg-card/30">
-                <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-2xl font-semibold text-foreground">Top Papers of the Month</h2>
-                  {monthlyDigest?.digestId && (
-                    <span className="text-xs text-muted-foreground">#{monthlyDigest.digestId}</span>
-                  )}
-                </div>
-                {monthlySummary ? (
-                  <DigestSummary text={monthlySummary} />
-                ) : (
-                  <p className="text-muted-foreground">No summary available.</p>
-                )}
-                {monthlyDigest?.audioUrl && (
-                  <audio controls className="w-full mt-2">
-                    <source src={monthlyDigest.audioUrl} />
-                    Your browser does not support the audio element.
-                  </audio>
-                )}
-              </section>
-
-              {monthlyClusters.map((cluster, clusterIdx) => {
-                const clusterLabel = cluster.label || `Cluster ${clusterIdx + 1}`
-                const topPapers = Array.isArray(cluster.topPapers) ? cluster.topPapers : []
-
-                return (
-                  <section
-                    key={`monthly-cluster-${clusterIdx}-${clusterLabel}`}
-                    className="border rounded-lg p-5 space-y-5"
-                  >
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <h3 className="text-xl font-semibold text-foreground">{clusterLabel}</h3>
-                        {topPapers.length > 0 && (
-                          <span className="text-xs text-muted-foreground/80">
-                            {topPapers.length} featured paper{topPapers.length > 1 ? "s" : ""}
-                          </span>
-                        )}
-                      </div>
-                      {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
-                        <ul className="space-y-2 text-muted-foreground">
-                          {cluster.bullets.map((bullet, bulletIdx) => (
-                            <li
-                              key={`monthly-cluster-${clusterIdx}-bullet-${bulletIdx}`}
-                              className="flex gap-2 items-start"
-                            >
-                              <span className="text-primary mt-1">•</span>
-                              <span className="leading-relaxed">{bullet}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    {topPapers.length > 0 ? (
-                      <div className="space-y-5">
-                        {topPapers.map((paper, paperIdx) => (
-                          <PaperCard
-                            key={`monthly-cluster-${clusterIdx}-paper-${paper.arxivId ?? paper.id ?? paperIdx}`}
-                            paper={paper}
-                            clusterLabel={clusterLabel}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground/80">
-                        No highlighted papers were returned for this cluster.
-                      </p>
-                    )}
-                  </section>
-                )
-              })}
+          <section className="border rounded-lg p-6 space-y-4 bg-card/30">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-2xl font-semibold text-foreground">
+                {frequency.charAt(0).toUpperCase() + frequency.slice(1)} Digest
+              </h2>
+              {digest?.digestId && <span className="text-xs text-muted-foreground">#{digest.digestId}</span>}
             </div>
-          )}
+            {digestSummary ? <DigestSummary text={digestSummary} /> : <p className="text-muted-foreground">No summary available.</p>}
+            {digest?.audioUrl && (
+              <audio controls className="w-full mt-2">
+                <source src={digest.audioUrl} />
+                Your browser does not support the audio element.
+              </audio>
+            )}
+          </section>
+
+          {digestClusters.map((cluster, clusterIdx) => {
+            const clusterLabel = cluster.label || `Cluster ${clusterIdx + 1}`
+            const topPapers = Array.isArray(cluster.topPapers) ? cluster.topPapers : []
+
+            return (
+              <section
+                key={`digest-cluster-${clusterIdx}-${clusterLabel}`}
+                className="border rounded-lg p-5 space-y-5"
+              >
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <h3 className="text-xl font-semibold text-foreground">{clusterLabel}</h3>
+                    {topPapers.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {topPapers.length} featured paper{topPapers.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                  {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
+                    <ul className="space-y-2 text-muted-foreground">
+                      {cluster.bullets.map((bullet, bulletIdx) => (
+                        <li
+                          key={`digest-cluster-${clusterIdx}-bullet-${bulletIdx}`}
+                          className="flex gap-2 items-start"
+                        >
+                          <span className="text-primary mt-1">•</span>
+                          <span className="leading-relaxed">{bullet}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {topPapers.length > 0 ? (
+                  <div className="space-y-5">
+                    {topPapers.map((paper, paperIdx) => (
+                      <PaperCard
+                        key={`digest-cluster-${clusterIdx}-paper-${paper.arxivId ?? paper.id ?? paperIdx}`}
+                        paper={paper}
+                        clusterLabel={clusterLabel}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No highlighted papers were returned for this cluster.
+                  </p>
+                )}
+              </section>
+            )
+          })}
         </div>
-      ) : (
-        !busy && (
-          <div className="mx-auto max-w-5xl px-6 py-24 text-center">
-            <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-2xl font-semibold mb-2">No digest loaded</h2>
-            <p className="text-muted-foreground">
-              Enter a topic above to load a cached digest or generate a fresh weekly or monthly summary.
-            </p>
-          </div>
-        )
       )}
     </main>
   )

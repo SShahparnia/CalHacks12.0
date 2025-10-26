@@ -28,19 +28,39 @@ async function parseJsonOrThrow(response: Response, fallbackMessage: string) {
   }
 }
 
-export async function createDigest(topic: string, days = 7) {
+type DigestOptions = {
+  days?: number
+  topK?: number
+  period?: "weekly" | "monthly"
+  voice?: boolean
+}
+
+export async function createDigest(topic: string, options: DigestOptions = {}) {
+  const { days = 7, topK, period, voice = false } = options
   const r = await fetch(buildUrl("/api/digest"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
-    body: JSON.stringify({ topic, days, voice: false }),
+    body: JSON.stringify({
+      topic,
+      days,
+      voice,
+      ...(typeof topK === "number" ? { topK } : {}),
+      ...(period ? { period } : {}),
+    }),
   })
   return parseJsonOrThrow(r, "Failed to generate digest")
 }
 
-export async function getLatest(topic: string) {
+export async function getLatest(topic: string, options: { days?: number } = {}) {
   const base = buildUrl("/api/digest/latest")
-  const url = `${base}${base.includes("?") ? "&" : "?"}topic=${encodeURIComponent(topic)}`
+  const search = new URLSearchParams({
+    topic,
+  })
+  if (options.days) {
+    search.set("days", String(options.days))
+  }
+  const url = `${base}${base.includes("?") ? "&" : "?"}${search.toString()}`
   const r = await fetch(url, { cache: "no-store" })
   return parseJsonOrThrow(r, "No cached digest")
 }

@@ -57,9 +57,26 @@ Run the API:
 uvicorn main:app --reload --port 8000
 ```
 
-The server exposes OpenAPI docs at `http://localhost:8000/docs`.
+#### Cloud digest cache (optional)
+To share cached digests (weekly or monthly) across teammates, point the backend at a managed Chroma project (e.g. trychroma.com) and set the following in `backend/.env`:
 
-### 3. Frontend (Next.js)
+```
+DIGEST_CACHE_BACKEND=chroma
+CHROMA_MODE=cloud
+CHROMA_API_KEY=<your_chroma_api_key>
+CHROMA_TENANT=<your_tenant_id>
+CHROMA_DATABASE=<your_database_name>
+CHROMA_HOST=api.trychroma.com   # optional override
+CHROMA_PORT=443
+CHROMA_SSL=true
+CHROMA_PAPERS_COLLECTION=papers
+CHROMA_DIGEST_COLLECTION=digests
+```
+
+Leave `DIGEST_CACHE_BACKEND` unset (or `sqlite`) to keep using the local `backend/kensa.db` cache.
+
+### 3. Frontend Setup
+From the `frontend` directory:
 ```bash
 cd ../frontend
 npm install

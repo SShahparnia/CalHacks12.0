@@ -177,9 +177,10 @@ def label_clusters_with_claude(cluster_payload: List[Dict[str, Any]], cluster_pr
             pass
     return out
 
-def compose_digest(topic: str, labeled_clusters: List[Dict[str, Any]], digest_prompt: str) -> str:
+def compose_digest(topic: str, days: int, top_k: int, labeled_clusters: List[Dict[str, Any]], prompt_template: str) -> str:
     compact = [{"label": c.get("label","Cluster"), "bullets": c.get("bullets", [])} for c in labeled_clusters]
-    return call_claude(digest_prompt.replace("{topic}", topic) + "\n\nCLUSTERS:\n" + json.dumps(compact, ensure_ascii=False))
+    prompt = prompt_template.format(topic=topic, days=days, top_k=top_k)
+    return call_claude(prompt + "\n\nCLUSTERS:\n" + json.dumps(compact, ensure_ascii=False))
 
 def maybe_tts_fish_audio(text: str) -> Optional[str]:
     return None

@@ -39,10 +39,24 @@ const SAMPLE_PAPERS = [
   },
 ]
 
+const WEEKLY_DAYS = 7
+const MONTHLY_DAYS = 30
+const DEFAULT_TOP_K = 5
+
 type Cluster = {
   label?: string
   bullets?: string[]
   topPapers?: DigestPaper[]
+}
+
+type DigestResponse = {
+  digestId?: string
+  summary?: string
+  clusters?: Cluster[]
+  audioUrl?: string | null
+  days?: number
+  period?: "weekly" | "monthly"
+  topK?: number
 }
 
 function AppNav({ active }: { active: "browse" | "digest" }) {
@@ -54,10 +68,10 @@ function AppNav({ active }: { active: "browse" | "digest" }) {
   return (
     <nav className="fixed top-6 right-6 z-50">
       <div className="flex items-center gap-1 px-3 py-2 bg-secondary/80 backdrop-blur-lg border border-border rounded-full shadow-lg">
-        <Link href="/" className={`${baseClasses} ${active === "browse" ? activeClasses : inactiveClasses}`}>
+        <Link href="/?view=browse" className={`${baseClasses} ${active === "browse" ? activeClasses : inactiveClasses}`}>
           Browse
         </Link>
-        <Link href="/digest" className={`${baseClasses} ${active === "digest" ? activeClasses : inactiveClasses}`}>
+        <Link href="/?view=digest" className={`${baseClasses} ${active === "digest" ? activeClasses : inactiveClasses}`}>
           Digest
         </Link>
         <div className="w-px h-4 bg-border" />
@@ -106,7 +120,13 @@ function BrowseView() {
   function goToDigest() {
     const query = topic.trim()
     if (!query) return
-    router.push(`/digest?topic=${encodeURIComponent(query)}`)
+    const params = new URLSearchParams({
+      view: "digest",
+      topic: query,
+      period: "weekly",
+      days: "7",
+    })
+    router.push(`/?${params.toString()}`)
   }
 
   const displayPapers: DigestPaper[] = showSamples ? SAMPLE_PAPERS : papers
@@ -199,22 +219,36 @@ function buildDigestSummaryNodes(summary: string): ReactNode[] {
   const lines = summary.split("\n")
   const nodes: ReactNode[] = []
   let list: string[] = []
+  let listType: "ordered" | "unordered" | null = null
   let key = 0
 
   const flushList = () => {
     if (list.length === 0) return
     const listKey = key++
-    nodes.push(
-      <ul key={`list-${listKey}`} className="space-y-2 text-muted-foreground">
-        {list.map((item, idx) => (
-          <li key={`list-${listKey}-${idx}`} className="flex items-start gap-2">
-            <span className="text-primary mt-1">•</span>
-            <span className="leading-relaxed">{item}</span>
-          </li>
-        ))}
-      </ul>,
-    )
+    if (listType === "ordered") {
+      nodes.push(
+        <ol key={`list-${listKey}`} className="space-y-2 text-muted-foreground list-decimal list-inside">
+          {list.map((item, idx) => (
+            <li key={`list-${listKey}-${idx}`} className="leading-relaxed">
+              {item}
+            </li>
+          ))}
+        </ol>,
+      )
+    } else {
+      nodes.push(
+        <ul key={`list-${listKey}`} className="space-y-2 text-muted-foreground">
+          {list.map((item, idx) => (
+            <li key={`list-${listKey}-${idx}`} className="flex items-start gap-2">
+              <span className="text-primary mt-1">•</span>
+              <span className="leading-relaxed">{item}</span>
+            </li>
+          ))}
+        </ul>,
+      )
+    }
     list = []
+    listType = null
   }
 
   for (const line of lines) {
@@ -223,7 +257,19 @@ function buildDigestSummaryNodes(summary: string): ReactNode[] {
       flushList()
       continue
     }
+    if (/^\d+\.\s+/.test(trimmed)) {
+      if (listType && listType !== "ordered") {
+        flushList()
+      }
+      listType = "ordered"
+      list.push(trimmed.replace(/^\d+\.\s+/, ""))
+      continue
+    }
     if (/^[-*]\s+/.test(trimmed)) {
+      if (listType && listType !== "unordered") {
+        flushList()
+      }
+      listType = "unordered"
       list.push(trimmed.replace(/^[-*]\s+/, ""))
       continue
     }
@@ -268,57 +314,121 @@ function DigestView() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialTopic = searchParams.get("topic") ?? ""
+  const initialPeriodParam = searchParams.get("period") === "monthly" ? "monthly" : "weekly"
+  const rawDays = Number.parseInt(searchParams.get("days") ?? "", 10)
+  const initialDays = Number.isNaN(rawDays) ? (initialPeriodParam === "monthly" ? MONTHLY_DAYS : WEEKLY_DAYS) : rawDays
 
   const [topic, setTopic] = useState(initialTopic)
-  const [digest, setDigest] = useState<any>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [weeklyDigest, setWeeklyDigest] = useState<DigestResponse | null>(null)
+  const [monthlyDigest, setMonthlyDigest] = useState<DigestResponse | null>(null)
+  const [weeklyLoading, setWeeklyLoading] = useState(false)
+  const [monthlyLoading, setMonthlyLoading] = useState(false)
+  const [weeklyError, setWeeklyError] = useState<string | null>(null)
+  const [monthlyError, setMonthlyError] = useState<string | null>(null)
+
+  function updateRoute(params: Record<string, string>) {
+    const search = new URLSearchParams({ view: "digest", ...params })
+    router.replace(`/?${search.toString()}`)
+  }
+
+  async function loadLatestWeekly(requestTopic?: string, days = WEEKLY_DAYS, skipRouting = false) {
+    const query = (requestTopic ?? topic).trim()
+    if (!query) return
+    const range = days > 0 ? days : WEEKLY_DAYS
+    setWeeklyLoading(true)
+    setWeeklyError(null)
+    try {
+      const data = await getLatest(query, { days: range })
+      setWeeklyDigest(data as DigestResponse)
+      setTopic(query)
+      if (!skipRouting) {
+        updateRoute({ topic: query, period: "weekly", days: String(range) })
+      }
+    } catch (e: any) {
+      setWeeklyDigest(null)
+      setWeeklyError(e?.message || "No cached digest found for this topic")
+    } finally {
+      setWeeklyLoading(false)
+    }
+  }
+
+  async function generateWeeklyDigest() {
+    const query = topic.trim()
+    if (!query) return
+    setWeeklyLoading(true)
+    setWeeklyError(null)
+    try {
+      const data = await createDigest(query, { days: WEEKLY_DAYS, topK: DEFAULT_TOP_K, period: "weekly" })
+      setWeeklyDigest(data as DigestResponse)
+      updateRoute({ topic: query, period: "weekly", days: String(WEEKLY_DAYS) })
+    } catch (e: any) {
+      setWeeklyDigest(null)
+      setWeeklyError(e?.message || "Failed to generate digest")
+    } finally {
+      setWeeklyLoading(false)
+    }
+  }
+
+  async function loadLatestMonthly(requestTopic?: string, days = MONTHLY_DAYS, skipRouting = false) {
+    const query = (requestTopic ?? topic).trim()
+    if (!query) return
+    const range = days > 0 ? days : MONTHLY_DAYS
+    setMonthlyLoading(true)
+    setMonthlyError(null)
+    try {
+      const data = await getLatest(query, { days: range })
+      setMonthlyDigest(data as DigestResponse)
+      setTopic(query)
+      if (!skipRouting) {
+        updateRoute({ topic: query, period: "monthly", days: String(range) })
+      }
+    } catch (e: any) {
+      setMonthlyDigest(null)
+      setMonthlyError(e?.message || "No cached monthly digest found for this topic")
+    } finally {
+      setMonthlyLoading(false)
+    }
+  }
+
+  async function generateMonthlyDigest() {
+    const query = topic.trim()
+    if (!query) return
+    setMonthlyLoading(true)
+    setMonthlyError(null)
+    try {
+      const data = await createDigest(query, { days: MONTHLY_DAYS, topK: DEFAULT_TOP_K, period: "monthly" })
+      setMonthlyDigest(data as DigestResponse)
+      updateRoute({ topic: query, period: "monthly", days: String(MONTHLY_DAYS) })
+    } catch (e: any) {
+      setMonthlyDigest(null)
+      setMonthlyError(e?.message || "Failed to generate monthly digest")
+    } finally {
+      setMonthlyLoading(false)
+    }
+  }
 
   useEffect(() => {
     setTopic(initialTopic)
-    if (initialTopic) {
-      void loadLatest(initialTopic)
+    if (!initialTopic) {
+      setWeeklyDigest(null)
+      setMonthlyDigest(null)
+      return
+    }
+    if (initialPeriodParam === "monthly") {
+      void loadLatestMonthly(initialTopic, initialDays, true)
+    } else {
+      void loadLatestWeekly(initialTopic, initialDays, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTopic])
+  }, [initialTopic, initialPeriodParam, initialDays])
 
-  async function loadLatest(requestTopic?: string) {
-    const query = (requestTopic ?? topic).trim()
-    if (!query) return
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await getLatest(query)
-      setDigest(data)
-      setTopic(query)
-      router.replace(`/digest?topic=${encodeURIComponent(query)}`)
-    } catch (e: any) {
-      setDigest(null)
-      setError(e.message || "No cached digest found for this topic")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function generateDigest() {
-    const query = topic.trim()
-    if (!query) return
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await createDigest(query, 7)
-      setDigest(data)
-      router.replace(`/digest?topic=${encodeURIComponent(query)}`)
-    } catch (e: any) {
-      setDigest(null)
-      setError(e.message || "Failed to generate digest")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const clusters: Cluster[] = Array.isArray(digest?.clusters) ? (digest?.clusters as Cluster[]) : []
-  const hasDigest = clusters.length > 0
+  const weeklySummary = typeof weeklyDigest?.summary === "string" ? weeklyDigest.summary : ""
+  const monthlySummary = typeof monthlyDigest?.summary === "string" ? monthlyDigest.summary : ""
+  const weeklyClusters = Array.isArray(weeklyDigest?.clusters) ? (weeklyDigest?.clusters as Cluster[]) : []
+  const monthlyClusters = Array.isArray(monthlyDigest?.clusters) ? (monthlyDigest?.clusters as Cluster[]) : []
+  const hasWeeklyDigest = weeklyClusters.length > 0 || weeklySummary.trim().length > 0
+  const hasMonthlyDigest = monthlyClusters.length > 0 || monthlySummary.trim().length > 0
+  const busy = weeklyLoading || monthlyLoading
 
   return (
     <main className="min-h-screen bg-background">
@@ -341,108 +451,205 @@ function DigestView() {
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="Search research topics..."
-                onKeyDown={(e) => e.key === "Enter" && loadLatest()}
+                onKeyDown={(e) => e.key === "Enter" && loadLatestWeekly()}
               />
             </div>
 
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center">
               <button
                 className="h-12 px-8 bg-secondary text-foreground border border-border rounded-xl font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                onClick={() => loadLatest()}
-                disabled={loading || !topic.trim()}
+                onClick={() => loadLatestWeekly()}
+                disabled={busy || !topic.trim()}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Load Digest
+                {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Load Weekly Digest
               </button>
               <button
                 className="h-12 px-8 bg-foreground text-background rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                onClick={generateDigest}
-                disabled={loading || !topic.trim()}
+                onClick={generateWeeklyDigest}
+                disabled={busy || !topic.trim()}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Generate Digest
+                {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Generate Weekly Digest
+              </button>
+              <button
+                className="h-12 px-8 bg-secondary text-foreground border border-border rounded-xl font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                onClick={() => loadLatestMonthly()}
+                disabled={busy || !topic.trim()}
+              >
+                {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Load Monthly Digest
+              </button>
+              <button
+                className="h-12 px-8 bg-foreground text-background rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                onClick={generateMonthlyDigest}
+                disabled={busy || !topic.trim()}
+              >
+                {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Generate Monthly Digest
               </button>
             </div>
           </div>
 
-          {error && (
-            <div className="mt-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive text-sm text-center">
-              {error}
+          {(weeklyError || monthlyError) && (
+            <div className="mt-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive text-sm">
+              <div className="space-y-1 text-center">
+                {weeklyError && (
+                  <p>
+                    <span className="font-semibold">Weekly:</span> {weeklyError}
+                  </p>
+                )}
+                {monthlyError && (
+                  <p>
+                    <span className="font-semibold">Monthly:</span> {monthlyError}
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {hasDigest ? (
-        <div className="mx-auto max-w-6xl px-6 py-12 space-y-8">
-          <section className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-6">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl font-semibold text-foreground">Weekly Digest</h2>
-              {digest?.digestId && <span className="text-xs text-muted-foreground">#{digest.digestId}</span>}
-            </div>
-            {typeof digest?.summary === "string" ? (
-              <DigestSummary text={digest.summary} />
-            ) : (
-              <p className="text-muted-foreground">No summary available.</p>
-            )}
-            {digest?.audioUrl && (
-              <audio controls className="w-full mt-2">
-                <source src={digest.audioUrl} />
-                Your browser does not support the audio element.
-              </audio>
-            )}
-          </section>
-
-          {clusters.map((cluster, clusterIdx) => {
-            const clusterLabel = cluster.label || `Cluster ${clusterIdx + 1}`
-            const topPapers = Array.isArray(cluster.topPapers) ? cluster.topPapers : []
-
-            return (
-              <section key={`cluster-${clusterIdx}-${clusterLabel}`} className="bg-card border border-border rounded-2xl p-6 space-y-6">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-baseline justify-between gap-4">
-                    <h3 className="text-xl font-semibold text-foreground">{clusterLabel}</h3>
-                    {topPapers.length > 0 && (
-                      <span className="text-xs text-muted-foreground/80">
-                        {topPapers.length} featured paper{topPapers.length > 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
-                  {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
-                    <ul className="space-y-2 text-muted-foreground">
-                      {cluster.bullets.map((bullet, bulletIdx) => (
-                        <li key={`cluster-${clusterIdx}-bullet-${bulletIdx}`} className="flex gap-2 items-start">
-                          <span className="text-primary mt-1">•</span>
-                          <span className="leading-relaxed">{bullet}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+      {(hasWeeklyDigest || hasMonthlyDigest) ? (
+        <div className="mx-auto max-w-6xl px-6 py-12 space-y-12">
+          {hasWeeklyDigest && (
+            <>
+              <section className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-6">
+                <div className="flex items-center justify-between gap-4">
+                  <h2 className="text-2xl font-semibold text-foreground">Weekly Digest</h2>
+                  {weeklyDigest?.digestId && <span className="text-xs text-muted-foreground">#{weeklyDigest.digestId}</span>}
                 </div>
-
-                {topPapers.length > 0 ? (
-                  <div className="space-y-5">
-                    {topPapers.map((paper, paperIdx) => (
-                      <PaperCard
-                        key={`cluster-${clusterIdx}-paper-${paper.arxivId ?? paper.id ?? paperIdx}`}
-                        paper={paper}
-                        clusterLabel={clusterLabel}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground/80">No highlighted papers were returned for this cluster.</p>
+                {weeklySummary ? <DigestSummary text={weeklySummary} /> : <p className="text-muted-foreground">No summary available.</p>}
+                {weeklyDigest?.audioUrl && (
+                  <audio controls className="w-full mt-2">
+                    <source src={weeklyDigest.audioUrl} />
+                    Your browser does not support the audio element.
+                  </audio>
                 )}
               </section>
-            )
-          })}
+
+              {weeklyClusters.map((cluster, clusterIdx) => {
+                const clusterLabel = cluster.label || `Cluster ${clusterIdx + 1}`
+                const topPapers = Array.isArray(cluster.topPapers) ? cluster.topPapers : []
+
+                return (
+                  <section
+                    key={`weekly-cluster-${clusterIdx}-${clusterLabel}`}
+                    className="bg-card border border-border rounded-2xl p-6 space-y-6"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <h3 className="text-xl font-semibold text-foreground">{clusterLabel}</h3>
+                        {topPapers.length > 0 && (
+                          <span className="text-xs text-muted-foreground/80">
+                            {topPapers.length} featured paper{topPapers.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
+                        <ul className="space-y-2 text-muted-foreground">
+                          {cluster.bullets.map((bullet, bulletIdx) => (
+                            <li key={`weekly-cluster-${clusterIdx}-bullet-${bulletIdx}`} className="flex gap-2 items-start">
+                              <span className="text-primary mt-1">•</span>
+                              <span className="leading-relaxed">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {topPapers.length > 0 ? (
+                      <div className="space-y-5">
+                        {topPapers.map((paper, paperIdx) => (
+                          <PaperCard
+                            key={`weekly-cluster-${clusterIdx}-paper-${paper.arxivId ?? paper.id ?? paperIdx}`}
+                            paper={paper}
+                            clusterLabel={clusterLabel}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground/80">No highlighted papers were returned for this cluster.</p>
+                    )}
+                  </section>
+                )
+              })}
+            </>
+          )}
+
+          {hasMonthlyDigest && (
+            <div className="space-y-6 border-t border-border pt-10">
+              <section className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-6">
+                <div className="flex items-center justify-between gap-4">
+                  <h2 className="text-2xl font-semibold text-foreground">Top Papers of the Month</h2>
+                  {monthlyDigest?.digestId && <span className="text-xs text-muted-foreground">#{monthlyDigest.digestId}</span>}
+                </div>
+                {monthlySummary ? <DigestSummary text={monthlySummary} /> : <p className="text-muted-foreground">No summary available.</p>}
+                {monthlyDigest?.audioUrl && (
+                  <audio controls className="w-full mt-2">
+                    <source src={monthlyDigest.audioUrl} />
+                    Your browser does not support the audio element.
+                  </audio>
+                )}
+              </section>
+
+              {monthlyClusters.map((cluster, clusterIdx) => {
+                const clusterLabel = cluster.label || `Cluster ${clusterIdx + 1}`
+                const topPapers = Array.isArray(cluster.topPapers) ? cluster.topPapers : []
+
+                return (
+                  <section
+                    key={`monthly-cluster-${clusterIdx}-${clusterLabel}`}
+                    className="bg-card border border-border rounded-2xl p-6 space-y-6"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-baseline justify-between gap-4">
+                        <h3 className="text-xl font-semibold text-foreground">{clusterLabel}</h3>
+                        {topPapers.length > 0 && (
+                          <span className="text-xs text-muted-foreground/80">
+                            {topPapers.length} featured paper{topPapers.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
+                        <ul className="space-y-2 text-muted-foreground">
+                          {cluster.bullets.map((bullet, bulletIdx) => (
+                            <li key={`monthly-cluster-${clusterIdx}-bullet-${bulletIdx}`} className="flex gap-2 items-start">
+                              <span className="text-primary mt-1">•</span>
+                              <span className="leading-relaxed">{bullet}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {topPapers.length > 0 ? (
+                      <div className="space-y-5">
+                        {topPapers.map((paper, paperIdx) => (
+                          <PaperCard
+                            key={`monthly-cluster-${clusterIdx}-paper-${paper.arxivId ?? paper.id ?? paperIdx}`}
+                            paper={paper}
+                            clusterLabel={clusterLabel}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground/80">No highlighted papers were returned for this cluster.</p>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          )}
         </div>
       ) : (
-        !loading && (
+        !busy && (
           <div className="mx-auto max-w-5xl px-6 py-24 text-center">
             <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-2xl font-semibold mb-2">No digest loaded</h2>
-            <p className="text-muted-foreground">Enter a topic above to load a cached digest or generate a fresh one.</p>
+            <p className="text-muted-foreground">
+              Enter a topic above to load a cached digest or generate a fresh weekly or monthly summary.
+            </p>
           </div>
         )
       )}

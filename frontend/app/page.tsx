@@ -1,44 +1,11 @@
 "use client"
-import { ReactNode, useEffect, useMemo, useState } from "react"
-import Link from "next/link"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createDigest, getLatest, listPapers } from "../lib/fetch"
-import { PaperCard, DigestPaper } from "../components/paper-card"
-import { Search, Loader2, FileText, Github, RefreshCw } from "lucide-react"
+import { PaperCard, type DigestPaper } from "../components/paper-card"
+import { Search, Loader2, FileText, RefreshCw } from "lucide-react"
 import HeroSection from "../components/HeroSection"
-
-const SAMPLE_PAPERS = [
-  {
-    title: "Attention Is All You Need",
-    authors: "Vaswani et al.",
-    published: "2017-06-12",
-    url: "https://arxiv.org/abs/1706.03762",
-    arxivId: "1706.03762",
-    cluster: "Transformer Architecture",
-    summary:
-      "We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train.",
-  },
-  {
-    title: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
-    authors: "Devlin et al.",
-    published: "2018-10-11",
-    url: "https://arxiv.org/abs/1810.04805",
-    arxivId: "1810.04805",
-    cluster: "Language Models",
-    summary:
-      "We introduce a new language representation model called BERT, which stands for Bidirectional Encoder Representations from Transformers. Unlike recent language representation models, BERT is designed to pre-train deep bidirectional representations from unlabeled text by jointly conditioning on both left and right context in all layers.",
-  },
-  {
-    title: "Denoising Diffusion Probabilistic Models",
-    authors: "Ho et al.",
-    published: "2020-06-19",
-    url: "https://arxiv.org/abs/2006.11239",
-    arxivId: "2006.11239",
-    cluster: "Generative Models",
-    summary:
-      "We present high quality image synthesis results using diffusion probabilistic models, a class of latent variable models inspired by considerations from nonequilibrium thermodynamics. Our best results are obtained by training on a weighted variational bound designed according to a novel connection between diffusion probabilistic models and denoising score matching with Langevin dynamics.",
-  },
-]
+import { NavBar } from "@/components/NavBar"
 
 const WEEKLY_DAYS = 7
 const MONTHLY_DAYS = 30
@@ -60,50 +27,70 @@ type DigestResponse = {
   topK?: number
 }
 
-function AppNav({ active }: { active: "browse" | "digest" }) {
-  const baseClasses =
-    "px-3 py-1.5 text-sm font-medium rounded-full border border-transparent transition-colors hover:bg-muted"
-  const activeClasses = "text-primary bg-primary/10 border-primary/30"
-  const inactiveClasses = "text-foreground hover:text-primary"
-
-  return (
-    <nav className="fixed top-6 right-6 z-50">
-      <div className="flex items-center gap-1 px-3 py-2 bg-secondary/80 backdrop-blur-lg border border-border rounded-full shadow-lg">
-        <Link href="/?view=browse" className={`${baseClasses} ${active === "browse" ? activeClasses : inactiveClasses}`}>
-          Browse
-        </Link>
-        <Link href="/?view=digest" className={`${baseClasses} ${active === "digest" ? activeClasses : inactiveClasses}`}>
-          Digest
-        </Link>
-        <div className="w-px h-4 bg-border" />
-        <a
-          href="https://github.com/rohankhatri7/CalHacks12.0"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"
-        >
-          <Github className="h-4 w-4" />
-          GitHub
-        </a>
-      </div>
-    </nav>
-  )
-}
-
-function BrowseView() {
+function HomeView() {
   const [topic, setTopic] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [papers, setPapers] = useState<DigestPaper[]>([])
-  const [showSamples, setShowSamples] = useState(true)
   const router = useRouter()
 
   async function generate() {
     const query = topic.trim()
     if (!query) return
+    const params = new URLSearchParams({
+      view: "browse",
+      topic: query,
+    })
+    router.push(`/?${params.toString()}`)
+  }
+
+  function goToDigest() {
+    const query = topic.trim()
+    if (!query) return
+    const params = new URLSearchParams({
+      view: "digest",
+      topic: query,
+      period: "weekly",
+      days: "7",
+    })
+    router.push(`/?${params.toString()}`)
+  }
+
+  return (
+    <main className="min-h-screen bg-background">
+      <HeroSection
+        topic={topic}
+        setTopic={setTopic}
+        loading={loading}
+        error={error}
+        generate={generate}
+        goToDigest={goToDigest}
+      />
+    </main>
+  )
+}
+
+function BrowseView() {
+  const searchParams = useSearchParams()
+  const initialTopic = searchParams.get("topic") ?? ""
+  const [topic, setTopic] = useState(initialTopic)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [papers, setPapers] = useState<DigestPaper[]>([])
+  const router = useRouter()
+
+  useEffect(() => {
+    if (initialTopic) {
+      setTopic(initialTopic)
+      void generate(initialTopic)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTopic])
+
+  async function generate(queryTopic?: string) {
+    const query = (queryTopic ?? topic).trim()
+    if (!query) return
     setLoading(true)
     setError(null)
-    setShowSamples(false)
     setPapers([])
     try {
       const results = await listPapers(query, 7, 10)
@@ -130,48 +117,33 @@ function BrowseView() {
     router.push(`/?${params.toString()}`)
   }
 
-  const displayPapers: DigestPaper[] = showSamples ? SAMPLE_PAPERS : papers
-
   return (
     <main className="min-h-screen bg-background">
-      <AppNav active="browse" />
+      <NavBar active="browse" />
 
       <HeroSection
-  topic={topic}
-  setTopic={setTopic}
-  loading={loading}
-  error={error}
-  generate={generate}
-  goToDigest={goToDigest}
-/>
+        topic={topic}
+        setTopic={setTopic}
+        loading={loading}
+        error={error}
+        generate={() => generate()}
+        goToDigest={goToDigest}
+      />
 
-
-      {displayPapers.length > 0 ? (
+      {papers.length > 0 ? (
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="space-y-6">
-            {displayPapers.map((paper, idx) => (
-              <PaperCard
-                key={paper.arxivId ?? paper.id ?? idx}
-                paper={paper}
-                clusterLabel={showSamples ? paper.cluster : undefined}
-              />
+            {papers.map((paper, idx) => (
+              <PaperCard key={paper.arxivId ?? paper.id ?? idx} paper={paper} />
             ))}
           </div>
-
-          {showSamples && (
-            <div className="mt-8 p-4 bg-muted/50 border border-border rounded-xl text-center">
-              <p className="text-sm text-muted-foreground">
-                Showing sample papers. Enter a topic above to fetch the latest results.
-              </p>
-            </div>
-          )}
         </div>
       ) : (
         !loading && (
           <div className="mx-auto max-w-5xl px-6 py-24 text-center">
             <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-2xl font-semibold mb-2">No papers found</h2>
-            <p className="text-muted-foreground">Try another topic or adjust your search keywords.</p>
+            <p className="text-muted-foreground">Enter a topic above to search for research papers.</p>
           </div>
         )
       )}
@@ -396,7 +368,7 @@ function DigestView() {
 
   return (
     <main className="min-h-screen bg-background">
-      <AppNav active="digest" />
+      <NavBar active="digest" />
 
       <div className="mx-auto max-w-4xl px-6 py-16 space-y-10">
         <header className="space-y-3 text-center">
@@ -470,16 +442,22 @@ function DigestView() {
         </div>
       </div>
 
-      {(hasWeeklyDigest || hasMonthlyDigest) ? (
+      {hasWeeklyDigest || hasMonthlyDigest ? (
         <div className="mx-auto max-w-4xl px-6 pb-16 space-y-12">
           {hasWeeklyDigest && (
             <>
               <section className="border rounded-lg p-6 space-y-4 bg-card/30">
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-2xl font-semibold text-foreground">Weekly Digest</h2>
-                  {weeklyDigest?.digestId && <span className="text-xs text-muted-foreground">#{weeklyDigest.digestId}</span>}
+                  {weeklyDigest?.digestId && (
+                    <span className="text-xs text-muted-foreground">#{weeklyDigest.digestId}</span>
+                  )}
                 </div>
-                {weeklySummary ? <DigestSummary text={weeklySummary} /> : <p className="text-muted-foreground">No summary available.</p>}
+                {weeklySummary ? (
+                  <DigestSummary text={weeklySummary} />
+                ) : (
+                  <p className="text-muted-foreground">No summary available.</p>
+                )}
                 {weeklyDigest?.audioUrl && (
                   <audio controls className="w-full mt-2">
                     <source src={weeklyDigest.audioUrl} />
@@ -509,7 +487,10 @@ function DigestView() {
                       {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
                         <ul className="space-y-2 text-muted-foreground">
                           {cluster.bullets.map((bullet, bulletIdx) => (
-                            <li key={`weekly-cluster-${clusterIdx}-bullet-${bulletIdx}`} className="flex gap-2 items-start">
+                            <li
+                              key={`weekly-cluster-${clusterIdx}-bullet-${bulletIdx}`}
+                              className="flex gap-2 items-start"
+                            >
                               <span className="text-primary mt-1">•</span>
                               <span className="leading-relaxed">{bullet}</span>
                             </li>
@@ -529,7 +510,9 @@ function DigestView() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground/80">No highlighted papers were returned for this cluster.</p>
+                      <p className="text-sm text-muted-foreground/80">
+                        No highlighted papers were returned for this cluster.
+                      </p>
                     )}
                   </section>
                 )
@@ -542,9 +525,15 @@ function DigestView() {
               <section className="border rounded-lg p-6 space-y-4 bg-card/30">
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-2xl font-semibold text-foreground">Top Papers of the Month</h2>
-                  {monthlyDigest?.digestId && <span className="text-xs text-muted-foreground">#{monthlyDigest.digestId}</span>}
+                  {monthlyDigest?.digestId && (
+                    <span className="text-xs text-muted-foreground">#{monthlyDigest.digestId}</span>
+                  )}
                 </div>
-                {monthlySummary ? <DigestSummary text={monthlySummary} /> : <p className="text-muted-foreground">No summary available.</p>}
+                {monthlySummary ? (
+                  <DigestSummary text={monthlySummary} />
+                ) : (
+                  <p className="text-muted-foreground">No summary available.</p>
+                )}
                 {monthlyDigest?.audioUrl && (
                   <audio controls className="w-full mt-2">
                     <source src={monthlyDigest.audioUrl} />
@@ -574,7 +563,10 @@ function DigestView() {
                       {Array.isArray(cluster.bullets) && cluster.bullets.length > 0 && (
                         <ul className="space-y-2 text-muted-foreground">
                           {cluster.bullets.map((bullet, bulletIdx) => (
-                            <li key={`monthly-cluster-${clusterIdx}-bullet-${bulletIdx}`} className="flex gap-2 items-start">
+                            <li
+                              key={`monthly-cluster-${clusterIdx}-bullet-${bulletIdx}`}
+                              className="flex gap-2 items-start"
+                            >
                               <span className="text-primary mt-1">•</span>
                               <span className="leading-relaxed">{bullet}</span>
                             </li>
@@ -594,7 +586,9 @@ function DigestView() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground/80">No highlighted papers were returned for this cluster.</p>
+                      <p className="text-sm text-muted-foreground/80">
+                        No highlighted papers were returned for this cluster.
+                      </p>
                     )}
                   </section>
                 )
@@ -619,6 +613,11 @@ function DigestView() {
 
 export default function Page() {
   const searchParams = useSearchParams()
-  const view = searchParams.get("view") === "digest" ? "digest" : "browse"
+  const view = searchParams.get("view")
+
+  if (!view) {
+    return <HomeView />
+  }
+
   return view === "digest" ? <DigestView /> : <BrowseView />
 }

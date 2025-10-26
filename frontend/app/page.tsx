@@ -163,8 +163,8 @@ function BrowseView() {
         <div className="w-full max-w-3xl px-6">
           {/* Title and Description */}
           <div className="text-center mb-12">
-            <h1 className="text-5xl font-semibold mb-3">Kensa</h1>
-            <p className="text-lg text-muted-foreground">Find and discover research papers.</p>
+            <h1 className="text-5xl font-semibold mb-3">PaperLink</h1>
+            <p className="text-lg text-muted-foreground">Find the latest arXiv papers in seconds.</p>
           </div>
 
           <div className="space-y-4">
@@ -324,7 +324,7 @@ function DigestView() {
 
   // Load recent topics from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem("kensa-recent-topics")
+    const stored = localStorage.getItem("paperlink-recent-topics")
     if (stored) {
       try {
         setRecentTopics(JSON.parse(stored))
@@ -350,7 +350,7 @@ function DigestView() {
     if (!newTopic.trim()) return
     setRecentTopics((prev) => {
       const updated = [newTopic, ...prev.filter((t) => t !== newTopic)].slice(0, 10)
-      localStorage.setItem("kensa-recent-topics", JSON.stringify(updated))
+      localStorage.setItem("paperlink-recent-topics", JSON.stringify(updated))
       return updated
     })
   }, [])
@@ -558,8 +558,8 @@ function DigestView() {
         <div className="w-full max-w-3xl px-6">
           {/* Title and Description */}
           <div className="text-center mb-12">
-            <h1 className="text-5xl font-semibold mb-3">Kensa</h1>
-            <p className="text-lg text-muted-foreground">Analyze and concisely summarize any research topic.</p>
+            <h1 className="text-5xl font-semibold mb-3">PaperLink</h1>
+            <p className="text-lg text-muted-foreground">Analyze any topic and generate concise digests.</p>
           </div>
 
           <div className="space-y-4">

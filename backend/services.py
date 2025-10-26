@@ -13,8 +13,7 @@ from chroma_client import get_collection
 load_dotenv()
 CHROMA_PAPERS_COLLECTION = os.getenv("CHROMA_PAPERS_COLLECTION", "papers")
 CLUSTER_BATCH_SIZE = max(1, int(os.getenv("CLUSTER_BATCH_SIZE", "4")))
-LABEL_MAX_TOKENS = max(100, int(os.getenv("LABEL_MAX_TOKENS", "750")))
-CLAUDE_MAX_TOKENS = max(200, int(os.getenv("CLAUDE_MAX_TOKENS", "750")))
+LABEL_MAX_TOKENS = max(100, int(os.getenv("LABEL_MAX_TOKENS", "500")))
 TOP_PAPER_MAX_CHARS = int(os.getenv("TOP_PAPER_MAX_CHARS", "420"))
 
 def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, Any]]:
@@ -195,9 +194,10 @@ def call_claude(prompt: str, system: str = "You are a concise academic editor.",
     
     payload = {
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": max_tokens or CLAUDE_MAX_TOKENS,
+        "max_tokens": 700,
         "temperature": 0.4,
         "system": system,
+        "stop_sequences": ["### END"],
         "messages": [{"role": "user", "content": prompt}]
     }
     

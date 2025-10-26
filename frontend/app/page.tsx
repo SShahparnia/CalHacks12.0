@@ -434,87 +434,83 @@ function DigestView() {
     <main className="min-h-screen bg-background">
       <AppNav active="digest" />
 
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm">
-        <div className="mx-auto max-w-4xl px-6 py-20">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold mb-4 text-balance tracking-tight">Digest Explorer</h1>
-            <p className="text-lg text-muted-foreground text-balance">
-              Load cached or freshly generated summaries for your research topic.
-            </p>
+      <div className="mx-auto max-w-4xl px-6 py-16 space-y-10">
+        <header className="space-y-3 text-center">
+          <h1 className="text-4xl font-bold tracking-tight">Digest Explorer</h1>
+          <p className="text-sm text-muted-foreground">
+            Generate or reload concise weekly and monthly summaries for any research topic.
+          </p>
+        </header>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 border rounded-lg px-4 py-3 bg-card/40">
+            <Search className="h-5 w-5 text-muted-foreground" />
+            <input
+              className="w-full bg-transparent focus:outline-none text-base"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. multimodal large language models"
+              onKeyDown={(e) => e.key === "Enter" && loadLatestWeekly()}
+            />
           </div>
 
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <input
-                className="w-full h-16 pl-14 pr-5 bg-background border-2 border-border rounded-2xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-all text-lg"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="Search research topics..."
-                onKeyDown={(e) => e.key === "Enter" && loadLatestWeekly()}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-3 justify-center">
-              <button
-                className="h-12 px-8 bg-secondary text-foreground border border-border rounded-xl font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                onClick={() => loadLatestWeekly()}
-                disabled={busy || !topic.trim()}
-              >
-                {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Load Weekly Digest
-              </button>
-              <button
-                className="h-12 px-8 bg-foreground text-background rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                onClick={generateWeeklyDigest}
-                disabled={busy || !topic.trim()}
-              >
-                {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Generate Weekly Digest
-              </button>
-              <button
-                className="h-12 px-8 bg-secondary text-foreground border border-border rounded-xl font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                onClick={() => loadLatestMonthly()}
-                disabled={busy || !topic.trim()}
-              >
-                {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                Load Monthly Digest
-              </button>
-              <button
-                className="h-12 px-8 bg-foreground text-background rounded-xl font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                onClick={generateMonthlyDigest}
-                disabled={busy || !topic.trim()}
-              >
-                {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                Generate Monthly Digest
-              </button>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => loadLatestWeekly()}
+              disabled={busy || !topic.trim()}
+            >
+              {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Load Weekly Digest
+            </button>
+            <button
+              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={generateWeeklyDigest}
+              disabled={busy || !topic.trim()}
+            >
+              {weeklyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Generate Weekly Digest
+            </button>
+            <button
+              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => loadLatestMonthly()}
+              disabled={busy || !topic.trim()}
+            >
+              {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              Load Monthly Digest
+            </button>
+            <button
+              className="flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium bg-foreground text-background hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={generateMonthlyDigest}
+              disabled={busy || !topic.trim()}
+            >
+              {monthlyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Generate Monthly Digest
+            </button>
           </div>
 
           {(weeklyError || monthlyError) && (
-            <div className="mt-6 p-4 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive text-sm">
-              <div className="space-y-1 text-center">
-                {weeklyError && (
-                  <p>
-                    <span className="font-semibold">Weekly:</span> {weeklyError}
-                  </p>
-                )}
-                {monthlyError && (
-                  <p>
-                    <span className="font-semibold">Monthly:</span> {monthlyError}
-                  </p>
-                )}
-              </div>
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {weeklyError && (
+                <p>
+                  <span className="font-medium">Weekly:</span> {weeklyError}
+                </p>
+              )}
+              {monthlyError && (
+                <p>
+                  <span className="font-medium">Monthly:</span> {monthlyError}
+                </p>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {(hasWeeklyDigest || hasMonthlyDigest) ? (
-        <div className="mx-auto max-w-6xl px-6 py-12 space-y-12">
+        <div className="mx-auto max-w-4xl px-6 pb-16 space-y-12">
           {hasWeeklyDigest && (
             <>
-              <section className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-6">
+              <section className="border rounded-lg p-6 space-y-4 bg-card/30">
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-2xl font-semibold text-foreground">Weekly Digest</h2>
                   {weeklyDigest?.digestId && <span className="text-xs text-muted-foreground">#{weeklyDigest.digestId}</span>}
@@ -535,7 +531,7 @@ function DigestView() {
                 return (
                   <section
                     key={`weekly-cluster-${clusterIdx}-${clusterLabel}`}
-                    className="bg-card border border-border rounded-2xl p-6 space-y-6"
+                    className="border rounded-lg p-5 space-y-5"
                   >
                     <div className="flex flex-col gap-2">
                       <div className="flex items-baseline justify-between gap-4">
@@ -579,7 +575,7 @@ function DigestView() {
 
           {hasMonthlyDigest && (
             <div className="space-y-6 border-t border-border pt-10">
-              <section className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-6">
+              <section className="border rounded-lg p-6 space-y-4 bg-card/30">
                 <div className="flex items-center justify-between gap-4">
                   <h2 className="text-2xl font-semibold text-foreground">Top Papers of the Month</h2>
                   {monthlyDigest?.digestId && <span className="text-xs text-muted-foreground">#{monthlyDigest.digestId}</span>}
@@ -600,7 +596,7 @@ function DigestView() {
                 return (
                   <section
                     key={`monthly-cluster-${clusterIdx}-${clusterLabel}`}
-                    className="bg-card border border-border rounded-2xl p-6 space-y-6"
+                    className="border rounded-lg p-5 space-y-5"
                   >
                     <div className="flex flex-col gap-2">
                       <div className="flex items-baseline justify-between gap-4">

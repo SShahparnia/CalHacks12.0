@@ -1,21 +1,15 @@
 "use client"
 import { ReactNode, useEffect, useMemo, useState, useCallback } from "react"
-import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createDigest, getLatest, listPapers } from "../lib/fetch"
+import { createDigest, listPapers } from "../lib/fetch"
 import { PaperCard, DigestPaper } from "../components/paper-card"
-import { Search, Loader2, FileText, Github, RefreshCw } from "lucide-react"
+import { Search, Loader2 } from "lucide-react"
 import HeroSection from "../components/HeroSection"
-//import { DigestSearchCombobox } from "../components/digest-search-combobox"
 import { DigestFrequencySelect, type DigestFrequency, frequencies } from "../components/digest-frequency-select"
 import { BrowseSearchBox } from "../components/browse-search-box"
 import HighlightToSpeech from "../components/HighlightToSpeech"
 import { NavBar } from "../components/NavBar"
 
-
-
-const WEEKLY_DAYS = 7
-const MONTHLY_DAYS = 30
 const DEFAULT_TOP_K = 5
 
 type Cluster = {
@@ -33,8 +27,6 @@ type DigestResponse = {
   period?: "weekly" | "monthly"
   topK?: number
 }
-
-
 
 function HomeView() {
   const [topic, setTopic] = useState("")
@@ -133,14 +125,12 @@ function BrowseView() {
 
       <div className="flex-1 flex items-center justify-center py-8">
         <div className="w-full max-w-3xl px-6">
-          {/* Title and Description */}
           <div className="text-center mb-12">
-            <h1 className="text-5xl font-semibold mb-3">PaperLink</h1>
+            <h1 className="text-6xl font-semibold mb-3">PaperLink</h1>
             <p className="text-lg text-muted-foreground">Find the latest arXiv papers in seconds.</p>
           </div>
 
           <div className="space-y-4">
-            {/* Browse search box */}
             <BrowseSearchBox
               topic={topic}
               setTopic={setTopic}
@@ -274,9 +264,6 @@ function DigestView() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialTopic = searchParams.get("topic") ?? ""
-  const initialPeriodParam = searchParams.get("period") === "monthly" ? "monthly" : "weekly"
-  const rawDays = Number.parseInt(searchParams.get("days") ?? "", 10)
-  const initialDays = Number.isNaN(rawDays) ? (initialPeriodParam === "monthly" ? MONTHLY_DAYS : WEEKLY_DAYS) : rawDays
 
   const [topic, setTopic] = useState(initialTopic)
   const [frequency, setFrequency] = useState<DigestFrequency>("weekly")
@@ -285,14 +272,6 @@ function DigestView() {
   const [error, setError] = useState<string | null>(null)
   const [recentTopics, setRecentTopics] = useState<string[]>([])
   const [showRecentTopics, setShowRecentTopics] = useState(false)
-  
-  // Legacy state for backward compatibility
-  const [weeklyDigest, setWeeklyDigest] = useState<DigestResponse | null>(null)
-  const [monthlyDigest, setMonthlyDigest] = useState<DigestResponse | null>(null)
-  const [weeklyLoading, setWeeklyLoading] = useState(false)
-  const [monthlyLoading, setMonthlyLoading] = useState(false)
-  const [weeklyError, setWeeklyError] = useState<string | null>(null)
-  const [monthlyError, setMonthlyError] = useState<string | null>(null)
 
   // Load recent topics from localStorage
   useEffect(() => {
@@ -369,114 +348,6 @@ function DigestView() {
     }
   }
 
-  const handleTopicSelect = (selectedTopic: string) => {
-    setTopic(selectedTopic)
-  }
-
-  function updateRoute(params: Record<string, string>) {
-    const search = new URLSearchParams({ view: "digest", ...params })
-    router.replace(`/?${search.toString()}`)
-  }
-
-  async function loadLatestWeekly(requestTopic?: string, days = WEEKLY_DAYS, skipRouting = false) {
-    const query = (requestTopic ?? topic).trim()
-    if (!query) return
-    const range = days > 0 ? days : WEEKLY_DAYS
-    setWeeklyLoading(true)
-    setWeeklyError(null)
-    try {
-      const data = await getLatest(query, { days: range })
-      setWeeklyDigest(data as DigestResponse)
-      setTopic(query)
-      if (!skipRouting) {
-        updateRoute({ topic: query, period: "weekly", days: String(range) })
-      }
-    } catch (e: any) {
-      setWeeklyDigest(null)
-      setWeeklyError(e?.message || "No cached digest found for this topic")
-    } finally {
-      setWeeklyLoading(false)
-    }
-  }
-
-  async function generateWeeklyDigest() {
-    const query = topic.trim()
-    if (!query) return
-    setWeeklyLoading(true)
-    setWeeklyError(null)
-    try {
-      const data = await createDigest(query, { days: WEEKLY_DAYS, topK: DEFAULT_TOP_K, period: "weekly" })
-      setWeeklyDigest(data as DigestResponse)
-      updateRoute({ topic: query, period: "weekly", days: String(WEEKLY_DAYS) })
-    } catch (e: any) {
-      setWeeklyDigest(null)
-      setWeeklyError(e?.message || "Failed to generate digest")
-    } finally {
-      setWeeklyLoading(false)
-    }
-  }
-
-  async function loadLatestMonthly(requestTopic?: string, days = MONTHLY_DAYS, skipRouting = false) {
-    const query = (requestTopic ?? topic).trim()
-    if (!query) return
-    const range = days > 0 ? days : MONTHLY_DAYS
-    setMonthlyLoading(true)
-    setMonthlyError(null)
-    try {
-      const data = await getLatest(query, { days: range })
-      setMonthlyDigest(data as DigestResponse)
-      setTopic(query)
-      if (!skipRouting) {
-        updateRoute({ topic: query, period: "monthly", days: String(range) })
-      }
-    } catch (e: any) {
-      setMonthlyDigest(null)
-      setMonthlyError(e?.message || "No cached monthly digest found for this topic")
-    } finally {
-      setMonthlyLoading(false)
-    }
-  }
-
-  async function generateMonthlyDigest() {
-    const query = topic.trim()
-    if (!query) return
-    setMonthlyLoading(true)
-    setMonthlyError(null)
-    try {
-      const data = await createDigest(query, { days: MONTHLY_DAYS, topK: DEFAULT_TOP_K, period: "monthly" })
-      setMonthlyDigest(data as DigestResponse)
-      updateRoute({ topic: query, period: "monthly", days: String(MONTHLY_DAYS) })
-    } catch (e: any) {
-      setMonthlyDigest(null)
-      setMonthlyError(e?.message || "Failed to generate monthly digest")
-    } finally {
-      setMonthlyLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    setTopic(initialTopic)
-    if (!initialTopic) {
-      setWeeklyDigest(null)
-      setMonthlyDigest(null)
-      return
-    }
-    if (initialPeriodParam === "monthly") {
-      void loadLatestMonthly(initialTopic, initialDays, true)
-    } else {
-      void loadLatestWeekly(initialTopic, initialDays, true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTopic, initialPeriodParam, initialDays])
-
-  const weeklySummary = typeof weeklyDigest?.summary === "string" ? weeklyDigest.summary : ""
-  const monthlySummary = typeof monthlyDigest?.summary === "string" ? monthlyDigest.summary : ""
-  const weeklyClusters = Array.isArray(weeklyDigest?.clusters) ? (weeklyDigest?.clusters as Cluster[]) : []
-  const monthlyClusters = Array.isArray(monthlyDigest?.clusters) ? (monthlyDigest?.clusters as Cluster[]) : []
-  const hasWeeklyDigest = weeklyClusters.length > 0 || weeklySummary.trim().length > 0
-  const hasMonthlyDigest = monthlyClusters.length > 0 || monthlySummary.trim().length > 0
-  const busy = weeklyLoading || monthlyLoading || loading
-
   // Check if we have digest data to display
   const digestSummary = typeof digest?.summary === "string" ? digest.summary : ""
   const digestClusters = Array.isArray(digest?.clusters) ? (digest?.clusters as Cluster[]) : []
@@ -528,133 +399,126 @@ function DigestView() {
 
       <div className="flex-1 flex items-center justify-center py-8">
         <div className="w-full max-w-3xl px-6">
-          {/* Title and Description */}
           <div className="text-center mb-12">
-            <h1 className="text-5xl font-semibold mb-3">PaperLink</h1>
+            <h1 className="text-6xl font-semibold mb-3">PaperLink</h1>
             <p className="text-lg text-muted-foreground">Analyze any topic and generate concise digests.</p>
           </div>
 
           <div className="space-y-4">
-          {/* Claude-style integrated search box */}
-          <div className="relative">
-            <div className="flex flex-col border-2 border-border rounded-2xl bg-card hover:border-primary/50 focus-within:border-primary transition-colors overflow-hidden">
-              {/* Main text input area - smaller */}
-              <div className="relative flex items-start gap-3 p-4">
-                <div className="flex-1">
-                  <textarea
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault()
-                        if (topic.trim() && !busy) {
-                          generateDigest()
+            <div className="relative">
+              <div className="flex flex-col border-2 border-border rounded-2xl bg-card hover:border-primary/50 focus-within:border-primary transition-colors overflow-hidden">
+                <div className="relative flex items-start gap-3 p-4">
+                  <div className="flex-1">
+                    <textarea
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault()
+                          if (topic.trim() && !loading) {
+                            generateDigest()
+                          }
                         }
-                      }
-                    }}
-                    placeholder="Search topics or paste a query…"
-                    className="w-full min-h-[60px] bg-transparent resize-none outline-none text-base placeholder:text-muted-foreground"
-                    rows={3}
-                  />
-                </div>
-              </div>
-              
-              {/* Bottom toolbar */}
-              <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
-                <div className="flex items-center gap-2">
-                  {/* Frequency selector on the left */}
-                  <DigestFrequencySelect
-  value={frequency}
-  onChange={(newFreq) => {
-    setFrequency(newFreq)
-    if (topic.trim() && !busy) {
-      const selected = frequencies.find((f) => f.value === newFreq)
-      const days = selected?.days || 7
-      let period: "weekly" | "monthly" = "weekly"
-      if (newFreq === "monthly" || newFreq === "yearly") {
-        period = "monthly"
-      }
-
-      // trigger regeneration manually with the *new* frequency
-      void (async () => {
-        setLoading(true)
-        setError(null)
-        try {
-          const data = await createDigest(topic.trim(), {
-            days,
-            topK: 5,
-            period,
-          })
-          setDigest(data)
-          const params = new URLSearchParams({
-            view: "digest",
-            topic,
-            period: newFreq,
-            days: String(days),
-          })
-          router.replace(`/?${params.toString()}`)
-        } catch (e: any) {
-          setDigest(null)
-          setError(e?.message || "Failed to generate digest")
-        } finally {
-          setLoading(false)
-        }
-      })()
-    }
-  }}
-  disabled={busy}
-/>
-
-                  {recentTopics.length > 0 && (
-                    <button
-                      onClick={() => setShowRecentTopics(true)}
-                      className="h-8 px-3 rounded-lg hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
-                      title="Recent topics (⌘K)"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Recent
-                    </button>
-                  )}
+                      }}
+                      placeholder="Search topics or paste a query…"
+                      className="w-full min-h-[60px] bg-transparent resize-none outline-none text-base placeholder:text-muted-foreground"
+                      rows={3}
+                    />
+                  </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                  {/* Submit button */}
-                  <button
-                    onClick={generateDigest}
-                    disabled={busy || !topic.trim()}
-                    className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
-                    title="Generate Digest (Enter)"
-                  >
-                    {loading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-4 w-4"
+                <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <DigestFrequencySelect
+                      value={frequency}
+                      onChange={(newFreq) => {
+                        setFrequency(newFreq)
+                        if (topic.trim() && !loading) {
+                          const selected = frequencies.find((f) => f.value === newFreq)
+                          const days = selected?.days || 7
+                          let period: "weekly" | "monthly" = "weekly"
+                          if (newFreq === "monthly" || newFreq === "yearly") {
+                            period = "monthly"
+                          }
+
+                          void (async () => {
+                            setLoading(true)
+                            setError(null)
+                            try {
+                              const data = await createDigest(topic.trim(), {
+                                days,
+                                topK: DEFAULT_TOP_K,
+                                period,
+                              })
+                              setDigest(data)
+                              const params = new URLSearchParams({
+                                view: "digest",
+                                topic,
+                                period: newFreq,
+                                days: String(days),
+                              })
+                              router.replace(`/?${params.toString()}`)
+                            } catch (e: any) {
+                              setDigest(null)
+                              setError(e?.message || "Failed to generate digest")
+                            } finally {
+                              setLoading(false)
+                            }
+                          })()
+                        }
+                      }}
+                      disabled={loading}
+                    />
+
+                    {recentTopics.length > 0 && (
+                      <button
+                        onClick={() => setShowRecentTopics(true)}
+                        className="h-8 px-3 rounded-lg hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
+                        title="Recent topics (⌘K)"
                       >
-                        <path d="M5 12h14" />
-                        <path d="m12 5 7 7-7 7" />
-                      </svg>
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Recent
+                      </button>
                     )}
-                  </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={generateDigest}
+                      disabled={loading || !topic.trim()}
+                      className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                      title="Generate Digest (Enter)"
+                    >
+                      {loading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-4 w-4"
+                        >
+                          <path d="M5 12h14" />
+                          <path d="m12 5 7 7-7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {error && (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
           </div>
         </div>
       </div>

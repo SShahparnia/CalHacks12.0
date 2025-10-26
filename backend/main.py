@@ -1,4 +1,4 @@
-import os, json, hashlib
+import os, json
 from typing import Literal
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -14,7 +14,9 @@ from services import (
     maybe_tts_fish_audio,
     enrich_top_papers,
 )
-from db import upsert_papers, save_digest, get_latest_digest, get_cached_digest
+from db import upsert_papers
+from cache import save_digest, get_latest_digest, get_cached_digest
+from digest_ids import build_digest_id
 
 app = FastAPI(title="Kensa API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -97,7 +99,7 @@ def digest(req: DigestReq):
 
     audio_url = maybe_tts_fish_audio(summary) if req.voice else None
 
-    digest_id = f"dg_{hashlib.sha1(f'{topic}_{period_days}'.encode()).hexdigest()[:10]}"
+    digest_id = build_digest_id(topic, period_days)
     save_digest(
         digest_id,
         topic,

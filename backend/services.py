@@ -4,14 +4,14 @@ import arxiv
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 import numpy as np
-import chromadb
-from chromadb.config import Settings
 import requests  # Add this import
 import datetime as dt
 from dotenv import load_dotenv
 
+from chroma_client import get_collection
+
 load_dotenv()
-CHROMA_DIR = os.getenv("CHROMA_DIR", "./chroma_store")
+CHROMA_PAPERS_COLLECTION = os.getenv("CHROMA_PAPERS_COLLECTION", "papers")
 CLUSTER_BATCH_SIZE = max(1, int(os.getenv("CLUSTER_BATCH_SIZE", "4")))
 LABEL_MAX_TOKENS = max(100, int(os.getenv("LABEL_MAX_TOKENS", "350")))
 
@@ -58,9 +58,8 @@ def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, An
     return papers
 
 
-def get_chroma():
-    client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
-    return client.get_or_create_collection("papers")
+def get_papers_collection():
+    return get_collection(CHROMA_PAPERS_COLLECTION)
 
 _embed_model = None
 def embed_texts(texts: List[str]) -> np.ndarray:
@@ -76,7 +75,7 @@ def fetch_or_create_embeddings(papers: List[Dict[str, Any]]) -> np.ndarray:
     if not papers:
         return np.empty((0, 0), dtype=np.float32)
 
-    col = get_chroma()
+    col = get_papers_collection()
     ids = [p["id"] for p in papers]
     existing_map: Dict[str, np.ndarray] = {}
 
@@ -115,7 +114,7 @@ def fetch_or_create_embeddings(papers: List[Dict[str, Any]]) -> np.ndarray:
     return np.vstack(embeddings).astype(np.float32)
 
 def upsert_chroma(papers: List[Dict[str, Any]], embeds: np.ndarray) -> None:
-    col = get_chroma()
+    col = get_papers_collection()
     ids = [p["id"] for p in papers]
     existing_ids = set()
     try:

@@ -12,7 +12,7 @@ Structure the markdown exactly as follows:
 ### Top {top_k} Papers
 - Present a numbered list (1. …) of the most impactful new papers. Each item must include the paper title and a single sentence on its contribution.
 ### Cluster Highlights
-- For each provided cluster, add a subsection `#### {cluster label}` containing up to two concise bullets describing the theme.
+- For each provided cluster, add a subsection `#### {{cluster label}}` containing up to two concise bullets describing the theme.
 ### What to Watch Next
 - Three forward-looking bullets on developing trends.
 Keep the tone concise, insightful, and academic. Do not invent papers or citations beyond supplied data.

@@ -13,7 +13,6 @@ from services import (
     compose_digest,
     maybe_tts_fish_audio,
     enrich_top_papers,
-    select_top_papers,
 )
 from db import upsert_papers
 from cache import save_digest, get_latest_digest, get_cached_digest
@@ -95,9 +94,8 @@ def digest(req: DigestReq):
 
     labeled = label_clusters_with_claude(payload, CLUSTER_PROMPT)
     labeled = enrich_top_papers(labeled or [], papers)
-    top_papers = select_top_papers(labeled, papers, req.top_k)
     prompt_template = MONTHLY_DIGEST_PROMPT if req.period == "monthly" else DIGEST_PROMPT
-    summary = compose_digest(req.topic, period_days, req.top_k, labeled, prompt_template, top_papers)
+    summary = compose_digest(req.topic, period_days, req.top_k, labeled, prompt_template)
 
     audio_url = maybe_tts_fish_audio(summary) if req.voice else None
 

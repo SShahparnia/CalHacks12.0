@@ -5,8 +5,8 @@ export default function Page() {
     <main className="min-h-screen flex items-center justify-center bg-background p-6 relative overflow-hidden">
       <div className="text-center space-y-8 max-w-2xl relative z-10">
         <div className="space-y-4">
-          <h1 className="text-6xl font-bold text-balance tracking-tight">Kensa</h1>
-          <p className="text-lg text-muted-foreground text-balance">AI-powered research paper digests from arXiv</p>
+          <h1 className="text-6xl font-bold text-balance tracking-tight">PaperLink</h1>
+          <p className="text-lg text-muted-foreground text-balance">AI-powered arXiv digests, ready to share</p>
         </div>
 
         <div className="flex gap-4 justify-center">

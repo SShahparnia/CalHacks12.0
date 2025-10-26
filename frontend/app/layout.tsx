@@ -7,8 +7,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Kensa - Research Digest",
-  description: "AI-powered research paper digest generator",
+  title: "PaperLink – Research Digest Companion",
+  description: "AI-powered PaperLink digests new arXiv research into clustered summaries.",
   generator: "v0.app",
 }
 

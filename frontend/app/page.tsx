@@ -80,20 +80,14 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-background">
       <nav className="fixed top-6 right-6 z-50">
-        <div className="flex items-center gap-2 px-4 py-2 bg-secondary/80 backdrop-blur-lg border border-border rounded-full shadow-lg">
-          <Link
-            href="/"
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"
-          >
-            <Home className="h-4 w-4" />
-            Home
-          </Link>
+        <div className="flex items-center px-3 py-2 bg-secondary/80 backdrop-blur-lg border border-border rounded-full shadow-lg">
+
           <div className="w-px h-4 bg-border" />
           <a
             href="https://github.com/rohankhatri7/CalHacks12.0"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"
+            className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"
           >
             <Github className="h-4 w-4" />
             GitHub

@@ -47,7 +47,6 @@ pip install -r requirements.txt
 Create `backend/.env` with at least:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-# Optional overrides
 # DATABASE_URL=backend/kensa.db
 # CHROMA_DIR=./chroma_store
 ```
@@ -134,15 +133,17 @@ Visit `http://localhost:3000` and generate a digest.
 ```
 paperlink/
 ├── backend/
-│   ├── main.py           # FastAPI entry point
-│   ├── services.py       # arXiv fetch, embeddings, clustering, Claude calls
-│   ├── db.py             # SQLite helpers and schema
-│   ├── prompts.py        # Prompt templates for Claude
-│   ├── chroma_store/     # Persistent Chroma collection
+│   ├── main.py              # FastAPI entry point
+│   ├── services.py          # arXiv fetch, embeddings, clustering, Claude calls
+│   ├── db.py                # SQLite helpers and schema
+│   ├── prompts.py           # Prompt templates for Claude
+│   ├── chroma_store/        # Persistent Chroma collection
 │   └── requirements.txt
 ├── frontend/
-│   ├── app/page.tsx      # PaperLink UI (App Router)
-│   ├── lib/fetch.ts      # Client helpers that call the API
+│   ├── app/
+│   │   └── page.tsx         # PaperLink UI (App Router)
+│   ├── lib/
+│   │   └── fetch.ts         # Client helpers that call the API
 │   └── package.json
 ├── docs/
 │   └── planning.md
@@ -151,20 +152,6 @@ paperlink/
 
 ---
 
-## Prompt Templates
-
-**Cluster Summaries**
-```
-You are an academic editor. For each cluster, return JSON in the following format:
-[
-  {
-    "label": "<5 words>",
-    "bullets": ["<12 words>", "<12 words>", "<12 words>"],
-    "topPapers": [{"title": "...", "why": "<12 words>"}]
-  }
-]
-Use only the provided titles and abstracts. Be factual and concise.
-```
 
 **Digest Writer**
 ```
@@ -182,7 +169,3 @@ Return plain text only.
 Pull requests are welcome. Please open an issue first for major changes so we can align on the approach.
 
 ---
-
-## License
-
-MIT License. See `LICENSE` for details.

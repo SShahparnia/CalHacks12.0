@@ -5,7 +5,6 @@ export default function HighlightToSpeech() {
   const [selectedText, setSelectedText] = useState("")
   const [buttonPos, setButtonPos] = useState<{ x: number; y: number } | null>(null)
   const [loading, setLoading] = useState(false)
-  const API_KEY = process.env.NEXT_PUBLIC_FISH_AUDIO_KEY
 
   // Track highlighted text and show a small floating button
   useEffect(() => {
@@ -27,32 +26,59 @@ export default function HighlightToSpeech() {
     return () => document.removeEventListener("mouseup", handleMouseUp)
   }, [])
 
-  // Generate speech using Fish Audio
+  // Generate speech using Fish Audio via Next.js API route
   async function handleSpeak() {
     if (!selectedText) return
+    
     setLoading(true)
     try {
-      const res = await fetch("https://api.fish.audio/v1/tts", {
+      console.log("Generating speech for text:", selectedText.substring(0, 50) + "...")
+      
+      const res = await fetch("/api/tts", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "fish-speech-1",
           text: selectedText,
-          voice: "male_1",
-          format: "mp3",
         }),
       })
-      if (!res.ok) throw new Error("TTS request failed")
+      
+      console.log("TTS API response status:", res.status)
+      
+      if (!res.ok) {
+        const error = await res.json()
+        console.error("TTS API error:", error)
+        throw new Error(error.error || "TTS request failed")
+      }
+      
       const blob = await res.blob()
+      console.log("Received audio blob, size:", blob.size, "bytes")
+      
+      if (blob.size === 0) {
+        throw new Error("Received empty audio file")
+      }
+      
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
-      audio.play()
+      
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e)
+        URL.revokeObjectURL(url)
+        throw new Error("Failed to play audio")
+      }
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(url)
+      }
+      
+      await audio.play()
+      console.log("Audio playing successfully")
+      
     } catch (err) {
-      console.error(err)
-      alert("Something went wrong with Fish Audio.")
+      console.error("Speech generation error:", err)
+      const errorMessage = err instanceof Error ? err.message : "Unknown error"
+      alert(`Failed to generate speech: ${errorMessage}\n\nCheck the browser console for details.`)
     } finally {
       setLoading(false)
       setButtonPos(null)

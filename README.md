@@ -22,9 +22,8 @@ PaperLink is an AI-powered research companion built at CalHacks 12.0. Give it a 
 | Backend | FastAPI, Uvicorn |
 | Database | SQLite (`backend/kensa.db`) |
 | Vector Store | Chroma (persistent client) |
-| Embeddings | Sentence Transformers (`all-MiniLM-L6-v2`) |
-| LLM | Claude 3.5 Sonnet (Anthropic API) |
-| Text to Speech | Fish Audio / Fish Speech|
+| LLM | claude-haiku-4-5-20251001 (Anthropic API) |
+| Text to Speech | Fish Audio / Fish Speech |
 
 ---
 

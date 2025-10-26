@@ -9,6 +9,12 @@ import { DigestFrequencySelect, type DigestFrequency, frequencies } from "../com
 import { BrowseSearchBox } from "../components/browse-search-box"
 import HighlightToSpeech from "../components/HighlightToSpeech"
 import { NavBar } from "../components/NavBar"
+import { IBM_Plex_Mono } from "next/font/google"
+
+const ibmPlexMono = IBM_Plex_Mono({ 
+  weight: ['400', '500', '700'],
+  subsets: ["latin"]
+})
 
 const DEFAULT_TOP_K = 5
 
@@ -126,7 +132,7 @@ function BrowseView() {
       <div className="flex-1 flex items-center justify-center py-8">
         <div className="w-full max-w-3xl px-6">
           <div className="text-center mb-12">
-            <h1 className="text-6xl font-semibold mb-3">PaperLink</h1>
+            <h1 className={`text-6xl font-semibold mb-3 ${ibmPlexMono.className}`}>PaperLink</h1>
             <p className="text-lg text-muted-foreground">Find the latest arXiv papers in seconds.</p>
           </div>
 
@@ -400,7 +406,7 @@ function DigestView() {
       <div className="flex-1 flex items-center justify-center py-8">
         <div className="w-full max-w-3xl px-6">
           <div className="text-center mb-12">
-            <h1 className="text-6xl font-semibold mb-3">PaperLink</h1>
+            <h1 className={`text-6xl font-semibold mb-3 ${ibmPlexMono.className}`}>PaperLink</h1>
             <p className="text-lg text-muted-foreground">Analyze any topic and generate concise digests.</p>
           </div>
 

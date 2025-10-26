@@ -1,4 +1,10 @@
 import { useState, useEffect } from 'react'
+import { IBM_Plex_Mono } from "next/font/google"
+
+const ibmPlexMono = IBM_Plex_Mono({ 
+  weight: ['400', '500', '700'],
+  subsets: ["latin"]
+})
 
 export default function Page() {
   const [displayText, setDisplayText] = useState('')
@@ -56,7 +62,7 @@ export default function Page() {
     <main className="min-h-screen flex items-center justify-center bg-background p-6 relative overflow-hidden">
       <div className="text-center space-y-8 max-w-2xl relative z-10">
         <div className="space-y-4">
-          <h1 className="text-6xl font-bold text-balance tracking-tight min-h-[72px] flex items-center justify-center">
+          <h1 className={`text-6xl font-semibold mb-3 ${ibmPlexMono.className}`}>
             <span>
               {displayText}
             </span>

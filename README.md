@@ -24,7 +24,7 @@ PaperLink is an AI-powered research companion built at CalHacks 12.0. Give it a 
 | Vector Store | Chroma (persistent client) |
 | Embeddings | Sentence Transformers (`all-MiniLM-L6-v2`) |
 | LLM | Claude 3.5 Sonnet (Anthropic API) |
-| Text to Speech | Fish Audio / Fish Speech (optional) |
+| Text to Speech | Fish Audio / Fish Speech|
 
 ---
 
@@ -66,7 +66,7 @@ CHROMA_MODE=cloud
 CHROMA_API_KEY=<your_chroma_api_key>
 CHROMA_TENANT=<your_tenant_id>
 CHROMA_DATABASE=<your_database_name>
-CHROMA_HOST=api.trychroma.com   # optional override
+CHROMA_HOST=api.trychroma.com   
 CHROMA_PORT=443
 CHROMA_SSL=true
 CHROMA_PAPERS_COLLECTION=papers

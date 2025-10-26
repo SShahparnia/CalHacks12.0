@@ -97,7 +97,7 @@ export function DigestFrequencySelect({
         zIndex: 9999,
         animation: 'slideDown 0.2s ease-out',
       }}
-      className="rounded-m border bg-gray-950 overflow-hidden"
+      className="rounded-xl border bg-gray-950 overflow-hidden"
     >
       <style jsx>{`
         @keyframes slideDown {
@@ -123,7 +123,7 @@ export function DigestFrequencySelect({
               "relative flex w-full cursor-pointer select-none items-center rounded-lg px-3.5 py-2.5 text-sm outline-none transition-all duration-200",
               "text-gray-200 hover:text-white",
               value === frequency.value 
-                ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 shadow-lg shadow-blue-500/10" 
+                ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border" 
                 : "hover:bg-white/5 border border-transparent"
             )}
           >

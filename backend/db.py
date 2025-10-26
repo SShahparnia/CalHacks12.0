@@ -8,6 +8,7 @@ DB_PATH = os.getenv("DATABASE_URL", "backend/kensa.db")
 DDL = """
 PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS papers (
+
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   abstract TEXT NOT NULL,
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS digests (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_digests_topic_created ON digests(topic, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_digests_topic_days_created ON digests(topic, days, created_at DESC);
 """
 
 def get_conn() -> sqlite3.Connection:
@@ -53,10 +55,10 @@ def upsert_papers(rows: List[Dict[str, Any]]) -> None:
     with _conn:
         _conn.executemany(sql, vals)
 
-def get_latest_digest(topic: str) -> Optional[Dict[str, Any]]:
+def get_latest_digest(topic: str, days: int) -> Optional[Dict[str, Any]]:
     row = _conn.execute(
-        "SELECT * FROM digests WHERE topic=? ORDER BY created_at DESC LIMIT 1",
-        (topic,)
+        "SELECT * FROM digests WHERE topic=? AND days=? ORDER BY created_at DESC LIMIT 1",
+        (topic, days)
     ).fetchone()
     if not row:
         return None

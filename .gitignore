@@ -21,7 +21,11 @@ frontend/.vercel/
 frontend/.env.local
 
 # Data / caches
-chroma_store/          # your Chroma persistence dir
+backend/backend/kensa.db
+backend/backend/kensa.db-wal
+backend/backend/kensa.db-shm
+backend/chroma_store         # your Chroma persistence dir
+chroma_store/
 **/.cache/
 **/dist/
 **/build/

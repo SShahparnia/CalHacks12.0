@@ -28,7 +28,7 @@ class DigestReq(BaseModel):
   topic: str
   days: int = Field(default=7, ge=1, le=90)
   voice: bool = False
-  top_k: int = Field(default=5, ge=3, le=12, alias="topK")
+  top_k: int = Field(default=3, ge=4, le=6, alias="topK")
   period: Literal["weekly", "monthly"] = "weekly"
 
 @app.get("/api/health")

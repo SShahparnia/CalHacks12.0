@@ -1,55 +1,64 @@
-CLUSTER_PROMPT = """You are an academic editor. For each cluster, return compact JSON:
-[{"label":"<5 words>","bullets":["<12 words>","<12 words>","<12 words>"],
-  "topPapers":[{"title":"...","why":"<12 words>"}]}]
-Use only provided titles and abstracts. Be factual and concise. Return a JSON array for the clusters you received.
-"""
+CLUSTER_PROMPT = """You are an academic editor. Produce compact, machine-parseable JSON summarizing the clusters provided.
 
-DIGEST_PROMPT = """Craft a polished weekly research brief on "{topic}" covering the past {days} days.
-You receive structured context:
-- TOP_PAPERS: JSON array with title, summary, url, authors, and published date.
-- CLUSTERS: JSON array with labels and supporting bullets.
-Use ONLY this material—do not fabricate papers.
+Output requirements (RETURN ONLY JSON, no extra text):
+- A JSON array of cluster objects.
+- Each cluster object must have exactly these keys in this order: "label", "bullets", "topPapers".
+- "label": short descriptive label (max 5 words).
+- "bullets": array of up to 3 concise bullets (each max 12 words) describing the cluster theme; factual and derived only from provided titles/abstracts.
+- "topPapers": array of up to 3 objects, each with keys "title" (use the title exactly as supplied) and "why" (one concise reason, max 12 words, factual).
+
 Constraints:
-- HARD CAP: ≤680 tokens. Aim ~600.
-- Short sentences (≤20 words). No filler. No meta.
-- End with "### END".
+- Use only information from the supplied titles and abstracts. Do not invent papers, results, numbers, authors, or citations.
+- Keep language factual, neutral, and compact.
+- Return valid JSON (no trailing commas, no comments).
+- Prefer the most representative papers first within "topPapers".
 
-If fewer than {top_k} papers are provided, list the available ones and note the shortfall once.
-Each section should feel substantial (3 sentences maximum) and analytical.
-Reference specific papers with inline numeric citations of the form `[1]`, `[2]`, etc., where the number maps to the item’s position in the “Top {top_k} Papers” list. When linking, wrap the paper title in markdown, e.g. `[Paper Title](url)[2]`.
-Structure the markdown exactly as follows:
-# Weekly Brief: {topic}
-### Executive Summary
-- one paragraph synthesizing the week's overarching theme, citing the most relevant papers (e.g., `[1][3]`).
-### Top {top_k} Papers
-- Present a list of max 3 all drawn from TOP_PAPERS. Each item must include a markdown-linked title (if URL exists) followed by exactly one sentence (<35 words) summarizing the contribution, ending with a citation tag `[n]` and optional author/date parenthetical. No extra text.
-### What to Watch Next
-- Provide three detailed bullets covering emerging risks/opportunities, each referencing at least one cited paper or concrete data point.
-### Spotlight Keywords
-- End with at least three  multi-word keyword phrases. For each phrase, add a short clause describing why it matters and include an inline markdown link to the most relevant paper (reuse the existing citation number, e.g., `[Scalable CUDA kernels](url)[1]`). Ensure keywords reflect distinct themes from the brief. Keep each bullet under 20 words.
-Keep the entire brief under 500 words. Maintain a concise yet rich, academic, and insight-driven tone. Do not invent papers or citations beyond supplied data.
+Example valid output:
+[{"label":"self-supervised vision","bullets":["reduces need for labels","pretraining on large image sets","improves transfer learning"],"topPapers":[{"title":"Example Paper A","why":"strong pretraining gains"},{"title":"Example Paper B","why":"novel augmentation approach"}]}]
 """
 
-MONTHLY_DIGEST_PROMPT = """Write a "Top Papers of the Month" briefing for "{topic}" focusing on major advancements from the last {days} days.
-You receive structured context:
-- TOP_PAPERS: JSON array with title, summary, url, authors, and published date.
-- CLUSTERS: JSON array with labels and supporting bullets.
-Use ONLY this material—do not fabricate papers. Mention if fewer than {top_k} papers are provided.
-Target richer coverage: each major section should contain at least two paragraphs. Reuse the numeric citation scheme described for the weekly brief.
-Return markdown with this format:
+DIGEST_PROMPT = """Craft a polished weekly research brief on "{topic}" covering the past {days} days. Output ONLY markdown following this exact structure and headings.
+
+Markdown structure (must follow exactly):
+# Weekly Brief: {topic}
+
+### Executive Summary
+- Two to three sentences summarizing the week's overarching theme (concise, factual).
+
+### Top {top_k} Papers
+- Use a numbered list ("1. ", "2. ", ...) with up to {top_k} entries, ordered by likely impact.
+- Each item must be formatted as: <Exact Title> — one sentence (<=25 words) describing the paper's key contribution or novelty. Use titles exactly as provided and do not invent content.
+
+### Cluster Highlights
+- For each provided cluster, add a subsection with heading: #### {cluster label}
+- Under each cluster heading include up to two bullets (use "- ") describing the cluster theme or the most important insight (each <=20 words). Base these statements only on the supplied cluster bullets, titles, and abstracts.
+
+### What to Watch Next
+- Three short forward-looking bullets (use "- "), each identifying a developing trend, open question, or promising direction suggested by the week's papers or clusters (each <=25 words).
+
+Constraints:
+- Do not invent papers, results, or citations beyond the supplied data.
+- Keep tone concise, insightful, and academic.
+- Return only the markdown described above, with no additional commentary, metadata, or JSON.
+"""
+
+MONTHLY_DIGEST_PROMPT = """Write a "Top Papers of the Month" briefing for "{topic}" focused on major advancements from the last {days} days. Output ONLY markdown following this exact structure.
+
+Markdown structure (must follow exactly):
 # Monthly Outlook: {topic}
+
 ### Breakthrough Snapshot
-- Two paragraphs capturing the month’s big picture and contrasting trends, referencing key papers via `[n]`.
+- One paragraph (2–4 sentences) summarizing the month's big picture and most significant shift or advance.
+
 ### Standout Advances
-- A numbered list spotlighting up to {top_k} notable papers from TOP_PAPERS. Each entry must be a single sentence (<35 words) with a markdown-linked title, concise takeaway, and citation `[n]` plus optional author/date note.
+- A numbered list ("1. ", "2. ", ...) of up to {top_k} notable papers, ordered by significance.
+- Each item must include the paper title exactly as provided, followed by a single-sentence takeaway (<=25 words) describing the main advance or implication.
+
 ### Emerging Directions
-- Three in-depth bullets on trends or open problems suggested by the clusters; cite supporting papers and discuss risks/opportunities.
-Conclude with a short paragraph titled **Key Resources** that links to any available URLs from TOP_PAPERS.
-### Signals & Noise
-- Provide two paragraphs separating trustworthy signals from hype or gaps, each grounded in concrete citations.
-### Benchmarks & Metrics
-- Detail any reported metrics (e.g., accuracy, latency, cost) with exact values and citations; otherwise note the absence of quantitative evidence.
-### Spotlight Keywords
-- Provide a bullet list of at least five multi-word keyword phrases, each paired with a sub-20-word rationale and a markdown link to the best supporting paper (reference the corresponding citation number). Prioritize phrases that reflect cross-cutting methods or applications surfaced in the digest.
-Keep the entire brief under 1100 words. Maintain a forward-looking tone appropriate for researchers catching up on the month.
+- Three bullets (use "- ") identifying trends, open problems, or promising next steps implied by the clusters and papers (each <=25 words).
+
+Constraints:
+- Use only supplied titles, abstracts, and cluster summaries. Do not hallucinate new papers, results, or citations.
+- Keep tone forward-looking, concise, and suitable for researchers.
+- Return only the specified markdown, with no extra text or metadata.
 """

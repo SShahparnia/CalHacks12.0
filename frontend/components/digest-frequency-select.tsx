@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { Check, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type DigestFrequency = "daily" | "weekly" | "monthly" | "yearly"
+type DigestFrequency = "daily" | "weekly" | "monthly"
 
 interface DigestFrequencySelectProps {
   value: DigestFrequency
@@ -17,7 +17,6 @@ const frequencies: { value: DigestFrequency; label: string; days: number }[] = [
   { value: "daily", label: "Daily Digest", days: 1 },
   { value: "weekly", label: "Weekly Digest", days: 7 },
   { value: "monthly", label: "Monthly Digest", days: 30 },
-  { value: "yearly", label: "Yearly Digest", days: 365 },
 ]
 
 export function DigestFrequencySelect({
@@ -98,7 +97,7 @@ export function DigestFrequencySelect({
         zIndex: 9999,
         animation: 'slideDown 0.2s ease-out',
       }}
-      className="rounded-xl border bg-gray-950 overflow-hidden"
+      className="rounded-m border bg-gray-950 overflow-hidden"
     >
       <style jsx>{`
         @keyframes slideDown {

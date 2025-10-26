@@ -10,6 +10,9 @@ import HeroSection from "../components/HeroSection"
 import { DigestFrequencySelect, type DigestFrequency, frequencies } from "../components/digest-frequency-select"
 import { BrowseSearchBox } from "../components/browse-search-box"
 import HighlightToSpeech from "../components/HighlightToSpeech"
+import { NavBar } from "../components/NavBar"
+
+
 
 const WEEKLY_DAYS = 7
 const MONTHLY_DAYS = 30
@@ -31,38 +34,7 @@ type DigestResponse = {
   topK?: number
 }
 
-function AppNav({ active }: { active: "browse" | "digest" | "home" }) {
-  const baseClasses =
-    "px-3 py-1.5 text-sm font-medium rounded-full border border-transparent transition-colors hover:bg-muted"
-  const activeClasses = "text-primary bg-primary/10 border-primary/30"
-  const inactiveClasses = "text-foreground hover:text-primary"
 
-  return (
-    <nav className="fixed top-6 right-6 z-50">
-      <div className="flex items-center gap-1 px-3 py-2 bg-secondary/80 backdrop-blur-lg border border-border rounded-full shadow-lg">
-        <Link href="/" className={`${baseClasses} ${active === "home" ? activeClasses : inactiveClasses}`}>
-          Home
-        </Link>
-        <Link href="/?view=browse" className={`${baseClasses} ${active === "browse" ? activeClasses : inactiveClasses}`}>
-          Browse
-        </Link>
-        <Link href="/?view=digest" className={`${baseClasses} ${active === "digest" ? activeClasses : inactiveClasses}`}>
-          Digest
-        </Link>
-        <div className="w-px h-4 bg-border" />
-        <a
-          href="https://github.com/rohankhatri7/CalHacks12.0"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-foreground hover:text-primary transition-colors rounded-full hover:bg-muted"
-        >
-          <Github className="h-4 w-4" />
-          GitHub
-        </a>
-      </div>
-    </nav>
-  )
-}
 
 function HomeView() {
   const [topic, setTopic] = useState("")
@@ -94,7 +66,7 @@ function HomeView() {
 
   return (
     <main className="min-h-screen bg-background">
-      <AppNav active="home" />
+      <NavBar active="home" />
       <HeroSection
         topic={topic}
         setTopic={setTopic}
@@ -157,7 +129,7 @@ function BrowseView() {
 
   return (
     <main className="min-h-screen bg-background flex flex-col">
-      <AppNav active="browse" />
+      <NavBar active="browse" />
 
       <div className="flex-1 flex items-center justify-center py-8">
         <div className="w-full max-w-3xl px-6">
@@ -512,7 +484,7 @@ function DigestView() {
 
   return (
     <main className="min-h-screen bg-background flex flex-col">
-      <AppNav active="digest" />
+      <NavBar active="digest" />
 
       {/* Recent Topics Modal */}
       {showRecentTopics && recentTopics.length > 0 && (

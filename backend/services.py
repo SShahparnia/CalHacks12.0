@@ -54,7 +54,7 @@ def fetch_arxiv(topic: str, days: int = 7, limit: int = 60) -> List[Dict[str, An
 
     return papers
 
-    
+
 def get_chroma():
     client = chromadb.PersistentClient(path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False))
     return client.get_or_create_collection("papers")
@@ -77,9 +77,19 @@ def upsert_chroma(papers: List[Dict[str, Any]], embeds: np.ndarray) -> None:
     )
 
 def cluster_embeddings(embeds: np.ndarray, k: int = 6):
-    km = KMeans(n_clusters=k, random_state=42)
+    n = int(len(embeds))
+    if n == 0:
+        # no data
+        return np.array([], dtype=int), np.empty((0, 0))
+    # k can't exceed n, and must be >= 1
+    k = max(1, min(k, n))
+    if n == 1:
+        # single point: one cluster, center is the point
+        return np.array([0], dtype=int), embeds.copy()
+    km = KMeans(n_clusters=k, random_state=42, n_init="auto")
     labels = km.fit_predict(embeds)
     return labels, km.cluster_centers_
+
 
 def clusters_to_payload(papers: List[Dict[str, Any]], embeds: np.ndarray, labels: np.ndarray):
     payload = []

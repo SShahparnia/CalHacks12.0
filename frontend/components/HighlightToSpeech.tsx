@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 export default function HighlightToSpeech() {
   const [selectedText, setSelectedText] = useState("")
@@ -10,26 +10,59 @@ export default function HighlightToSpeech() {
   const [currentWordIndex, setCurrentWordIndex] = useState(-1)
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
   const [overlayPos, setOverlayPos] = useState<{ x: number; y: number } | null>(null)
+  const buttonMouseDownRef = useRef(false)
 
   // Track highlighted text and show a small floating button
   useEffect(() => {
-    const handleMouseUp = () => {
+    const updateFromSelection = () => {
       const selection = window.getSelection()
-      const text = selection?.toString().trim() || ""
-      if (text) {
-        const range = selection?.getRangeAt(0)
-        const rect = range?.getBoundingClientRect()
-        if (rect) {
-          setButtonPos({ x: rect.right + window.scrollX, y: rect.top + window.scrollY - 40 })
-          setOverlayPos({ x: rect.left + window.scrollX, y: rect.top + window.scrollY })
-        }
-        setSelectedText(text)
-      } else {
+      if (!selection || selection.isCollapsed) {
         setButtonPos(null)
+        setSelectedText("")
+        return
       }
+
+      const text = selection.toString().replace(/\s+/g, " ").trim()
+      if (!text) {
+        setButtonPos(null)
+        setSelectedText("")
+        return
+      }
+
+      let range: Range
+      try {
+        range = selection.getRangeAt(0)
+      } catch {
+        return
+      }
+
+      // Use the last client rect for multi-line selections; fallback to bounding rect
+      const clientRects = range.getClientRects()
+      const rect = clientRects.length ? clientRects[clientRects.length - 1] : range.getBoundingClientRect()
+      if (!rect) return
+
+      // For fixed positioning, use viewport coordinates (no scroll offsets) and clamp to viewport
+      const x = Math.min(window.innerWidth - 120, rect.right + 8)
+      const y = Math.min(window.innerHeight - 48, Math.max(8, rect.top - 36))
+      setButtonPos({ x, y })
+      setOverlayPos({ x: rect.left, y: rect.top })
+      setSelectedText(text)
     }
+
+    const handleMouseUp = () => {
+      // Defer to ensure selection is finalized
+      setTimeout(updateFromSelection, 0)
+    }
+
     document.addEventListener("mouseup", handleMouseUp)
-    return () => document.removeEventListener("mouseup", handleMouseUp)
+    document.addEventListener("selectionchange", () => {
+      if (buttonMouseDownRef.current) return
+      updateFromSelection()
+    })
+    return () => {
+      document.removeEventListener("mouseup", handleMouseUp)
+      document.removeEventListener("selectionchange", updateFromSelection as any)
+    }
   }, [])
 
   // Generate speech using Fish Audio via Next.js API route
@@ -141,9 +174,11 @@ export default function HighlightToSpeech() {
       {/* Floating Speak Button */}
       {buttonPos && (
         <button
+          onMouseDown={() => (buttonMouseDownRef.current = true)}
+          onMouseUp={() => (buttonMouseDownRef.current = false)}
           onClick={handleSpeak}
           disabled={loading}
-          className="fixed z-50 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 text-sm rounded-lg shadow-lg transition-all flex items-center gap-2"
+          className="fixed z-[2000] bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 text-sm rounded-lg shadow-lg transition-all flex items-center gap-2"
           style={{ top: buttonPos.y, left: buttonPos.x }}
         >
           {loading ? (
@@ -158,11 +193,11 @@ export default function HighlightToSpeech() {
 
       {/* Reading Text Box - positioned above highlighted text */}
       {showOverlay && overlayPos && (
-        <div 
-          className="fixed z-[100] max-w-2xl p-6 bg-gray-900 rounded-xl shadow-2xl border border-gray-700"
-          style={{ 
-            top: overlayPos.y - 20, 
-            left: overlayPos.x,
+        <div
+          className="fixed z-[2000] max-w-2xl p-6 bg-gray-900 rounded-xl shadow-2xl border border-gray-700"
+          style={{
+            top: Math.max(8, overlayPos.y - 20),
+            left: Math.min(window.innerWidth - 32, Math.max(8, overlayPos.x)),
             transform: 'translateY(-100%)'
           }}
         >
